@@ -365,10 +365,6 @@
                 <h3>Робочих днів</h3>
                 <div class="value" id="workDays">0</div>
             </div>
-            <div class="stat-card">
-                <h3>Середньо годин/день</h3>
-                <div class="value" id="avgHours">0</div>
-            </div>
             <div class="stat-card" id="minHoursCard">
                 <h3>Мінімум на місяць</h3>
                 <div class="value" id="minHoursDisplay">160</div>
@@ -589,7 +585,6 @@
 
             document.getElementById('totalHours').textContent = totalHours.toFixed(1);
             document.getElementById('workDays').textContent = workDays;
-            document.getElementById('avgHours').textContent = workDays > 0 ? (totalHours / workDays).toFixed(1) : '0';
             document.getElementById('minHoursDisplay').textContent = minHours;
             document.getElementById('remainingHours').textContent = remaining > 0 ? remaining.toFixed(1) : '0';
 
