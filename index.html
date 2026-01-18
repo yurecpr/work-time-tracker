@@ -746,6 +746,14 @@
             const year = parseInt(document.getElementById('yearSelect').value);
             const storageKey = `timeTracking_${year}_${String(month + 1).padStart(2, '0')}`;
             
+            // Завантажуємо minHours з localStorage (завжди)
+            const savedMinHours = localStorage.getItem(`${storageKey}_minHours`);
+            if (savedMinHours) {
+                document.getElementById('minHours').value = savedMinHours;
+            } else {
+                document.getElementById('minHours').value = 160;
+            }
+            
             // Спробувати завантажити з Firebase
             if (firebaseSyncEnabled) {
                 const firebaseData = await loadFromFirebase(month, year);
@@ -767,16 +775,8 @@
                 }
             }
             
-            // Завантаження з localStorage якщо Google недоступний
+            // Завантаження з localStorage якщо Firebase недоступний
             const saved = localStorage.getItem(storageKey);
-            const savedMinHours = localStorage.getItem(`${storageKey}_minHours`);
-            
-            // Встановлюємо minHours (за замовчуванням 160, або збережене значення)
-            if (savedMinHours) {
-                document.getElementById('minHours').value = savedMinHours;
-            } else {
-                document.getElementById('minHours').value = 160;
-            }
             
             if (!saved) return;
 
