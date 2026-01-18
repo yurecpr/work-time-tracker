@@ -1,0 +1,83 @@
+// Google Apps Script з підтримкою CORS
+// Скопіюйте цей код в Google Apps Script замість старого
+
+function doPost(e) {
+  try {
+    if (!e || !e.postData || !e.postData.contents) {
+      return createResponse({success: false, message: 'Немає даних'});
+    }
+    
+    const data = JSON.parse(e.postData.contents);
+    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    
+    if (data.action === 'save') {
+      const month = data.month;
+      const year = data.year;
+      const rows = data.rows;
+      
+      // Створюємо або отримуємо аркуш для місяця
+      const sheetName = month + '_' + year;
+      let sheet = ss.getSheetByName(sheetName);
+      
+      if (!sheet) {
+        sheet = ss.insertSheet(sheetName);
+      }
+      
+      // Очищуємо аркуш
+      sheet.clear();
+      
+      // Записуємо заголовки
+      sheet.getRange(1, 1, 1, 7).setValues([['День', 'День тижня', 'Початок', 'Кінець', 'Перерва', 'Годин', 'Примітки']]);
+      
+      // Записуємо дані
+      if (rows && rows.length > 0) {
+        sheet.getRange(2, 1, rows.length, 7).setValues(rows);
+      }
+      
+      return createResponse({success: true, message: 'Дані збережено'});
+    }
+    
+    return createResponse({success: false, message: 'Невідома дія'});
+    
+  } catch (error) {
+    return createResponse({success: false, message: 'Помилка: ' + error.toString()});
+  }
+}
+
+function doGet(e) {
+  try {
+    const action = e.parameter.action;
+    
+    if (action === 'load') {
+      const month = e.parameter.month;
+      const year = e.parameter.year;
+      const ss = SpreadsheetApp.getActiveSpreadsheet();
+      const sheetName = month + '_' + year;
+      let sheet = ss.getSheetByName(sheetName);
+      
+      if (!sheet) {
+        return createResponse({success: true, data: []});
+      }
+      
+      const lastRow = sheet.getLastRow();
+      if (lastRow <= 1) {
+        return createResponse({success: true, data: []});
+      }
+      
+      const data = sheet.getRange(2, 1, lastRow - 1, 7).getValues();
+      return createResponse({success: true, data: data});
+    }
+    
+    return createResponse({success: true, message: 'API працює! Використовуйте POST запити для збереження даних.'});
+    
+  } catch (error) {
+    return createResponse({success: false, message: 'Помилка: ' + error.toString()});
+  }
+}
+
+// Функція для створення відповіді з CORS
+function createResponse(data) {
+  return ContentService
+    .createTextOutput(JSON.stringify(data))
+    .setMimeType(ContentService.MimeType.JSON);
+}

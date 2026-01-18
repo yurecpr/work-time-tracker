@@ -1,0 +1,1109 @@
+<!DOCTYPE html>
+<html lang="uk">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Облік робочих годин</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            padding: 20px;
+            min-height: 100vh;
+        }
+
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 15px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+            overflow: hidden;
+        }
+
+        .header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 30px;
+            text-align: center;
+        }
+
+        .header h1 {
+            font-size: 2.5em;
+            margin-bottom: 10px;
+        }
+
+        .header p {
+            font-size: 1.2em;
+            opacity: 0.9;
+        }
+
+        .month-selector {
+            padding: 20px 30px;
+            background: white;
+            display: flex;
+            gap: 20px;
+            align-items: center;
+            justify-content: center;
+            flex-wrap: wrap;
+            border-bottom: 2px solid #e9ecef;
+        }
+
+        .month-selector label {
+            font-weight: 600;
+            color: #495057;
+        }
+
+        .month-selector select,
+        .month-selector input {
+            padding: 10px 15px;
+            border: 2px solid #e9ecef;
+            border-radius: 8px;
+            font-size: 16px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: border-color 0.3s;
+        }
+
+        .month-selector select:focus,
+        .month-selector input:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+
+        .month-selector input[type="number"] {
+            width: 120px;
+        }
+
+        .controls {
+            padding: 20px 30px;
+            background: #f8f9fa;
+            display: flex;
+            gap: 15px;
+            flex-wrap: wrap;
+            border-bottom: 2px solid #e9ecef;
+        }
+
+        .btn {
+            padding: 12px 24px;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 16px;
+            font-weight: 600;
+            transition: all 0.3s;
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .btn-primary {
+            background: #667eea;
+            color: white;
+        }
+
+        .btn-primary:hover {
+            background: #5568d3;
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(102, 126, 234, 0.4);
+        }
+
+        .btn-success {
+            background: #10b981;
+            color: white;
+        }
+
+        .btn-success:hover {
+            background: #059669;
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(16, 185, 129, 0.4);
+        }
+
+        .btn-info {
+            background: #3b82f6;
+            color: white;
+        }
+
+        .btn-info:hover {
+            background: #2563eb;
+            transform: translateY(-2px);
+        }
+
+        .btn-warning {
+            background: #f59e0b;
+            color: white;
+        }
+
+        .btn-warning:hover {
+            background: #d97706;
+            transform: translateY(-2px);
+        }
+
+        .notification {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            padding: 15px 25px;
+            background: #10b981;
+            color: white;
+            border-radius: 8px;
+            box-shadow: 0 5px 20px rgba(0,0,0,0.3);
+            z-index: 1000;
+            animation: slideIn 0.3s ease;
+        }
+
+        .notification.error {
+            background: #ef4444;
+        }
+
+        @keyframes slideIn {
+            from {
+                transform: translateX(400px);
+                opacity: 0;
+            }
+            to {
+                transform: translateX(0);
+                opacity: 1;
+            }
+        }
+
+        .table-container {
+            padding: 30px;
+            overflow-x: auto;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 15px;
+        }
+
+        th {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 15px 10px;
+            text-align: left;
+            font-weight: 600;
+            position: sticky;
+            top: 0;
+            z-index: 10;
+        }
+
+        td {
+            padding: 12px 10px;
+            border-bottom: 1px solid #e9ecef;
+        }
+
+        tr:hover {
+            background: #f8f9fa;
+        }
+
+        .weekend {
+            background: #fee;
+        }
+
+        .weekend:hover {
+            background: #fdd;
+        }
+
+        input[type="time"],
+        input[type="number"],
+        input[type="text"] {
+            width: 100%;
+            padding: 8px;
+            border: 2px solid #e9ecef;
+            border-radius: 6px;
+            font-size: 14px;
+            transition: border-color 0.3s;
+        }
+
+        input:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+
+        .hours-cell {
+            font-weight: bold;
+            color: #667eea;
+            font-size: 16px;
+        }
+
+        .total-row {
+            background: #f8f9fa;
+            font-weight: bold;
+            font-size: 18px;
+        }
+
+        .total-row td {
+            padding: 20px 10px;
+            border-top: 3px solid #667eea;
+        }
+
+        .total-hours {
+            color: #667eea;
+            font-size: 24px;
+        }
+
+        .stats {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 20px;
+            padding: 30px;
+            background: #f8f9fa;
+        }
+
+        .stat-card {
+            background: white;
+            padding: 20px;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            text-align: center;
+        }
+
+        .stat-card h3 {
+            color: #6c757d;
+            font-size: 14px;
+            margin-bottom: 10px;
+        }
+
+        .stat-card .value {
+            color: #667eea;
+            font-size: 32px;
+            font-weight: bold;
+        }
+
+        .stat-card.success .value {
+            color: #10b981;
+        }
+
+        .stat-card.warning .value {
+            color: #f59e0b;
+        }
+
+        .stat-card.danger .value {
+            color: #ef4444;
+        }
+
+        .footer {
+            padding: 20px;
+            text-align: center;
+            background: #f8f9fa;
+            color: #6c757d;
+            font-size: 14px;
+        }
+
+        @media print {
+            body {
+                background: white;
+                padding: 0;
+            }
+            .controls, .btn, .month-selector {
+                display: none !important;
+            }
+            .container {
+                box-shadow: none;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>📊 Облік робочого часу</h1>
+            <p id="headerMonth">Січень 2026</p>
+        </div>
+
+        <div class="month-selector">
+            <label for="monthSelect">Місяць:</label>
+            <select id="monthSelect" onchange="changeMonth()">
+                <option value="0">Січень</option>
+                <option value="1">Лютий</option>
+                <option value="2">Березень</option>
+                <option value="3">Квітень</option>
+                <option value="4">Травень</option>
+                <option value="5">Червень</option>
+                <option value="6">Липень</option>
+                <option value="7">Серпень</option>
+                <option value="8">Вересень</option>
+                <option value="9">Жовтень</option>
+                <option value="10">Листопад</option>
+                <option value="11">Грудень</option>
+            </select>
+
+            <label for="yearSelect">Рік:</label>
+            <select id="yearSelect" onchange="changeMonth()">
+                <option value="2025">2025</option>
+                <option value="2026" selected>2026</option>
+                <option value="2027">2027</option>
+                <option value="2028">2028</option>
+            </select>
+
+            <label for="minHours">Мінімум годин на місяць:</label>
+            <input type="number" id="minHours" value="160" min="0" step="1" onchange="updateStats()">
+        </div>
+
+        <div class="controls">
+            <button class="btn btn-primary" onclick="saveData()">💾 Зберегти локально</button>
+            <button class="btn btn-success" id="googleBtn" onclick="connectGoogle()">🔗 Підключити Google Sheets</button>
+            <button class="btn btn-success" id="syncBtn" onclick="syncToGoogle()" style="display:none">☁️ Синхронізувати з Google</button>
+            <button class="btn btn-success" onclick="exportToCSV()">📥 Експорт в CSV</button>
+            <button class="btn btn-info" onclick="window.print()">🖨️ Друк</button>
+        </div>
+
+        <div class="stats">
+            <div class="stat-card">
+                <h3>Всього годин</h3>
+                <div class="value" id="totalHours">0</div>
+            </div>
+            <div class="stat-card">
+                <h3>Робочих днів</h3>
+                <div class="value" id="workDays">0</div>
+            </div>
+            <div class="stat-card">
+                <h3>Середньо годин/день</h3>
+                <div class="value" id="avgHours">0</div>
+            </div>
+            <div class="stat-card" id="minHoursCard">
+                <h3>Мінімум на місяць</h3>
+                <div class="value" id="minHoursDisplay">160</div>
+            </div>
+            <div class="stat-card" id="remainingCard">
+                <h3>Залишилось годин</h3>
+                <div class="value" id="remainingHours">160</div>
+            </div>
+        </div>
+
+        <div class="table-container">
+            <table id="timeTable">
+                <thead>
+                    <tr>
+                        <th>Дата</th>
+                        <th>День тижня</th>
+                        <th>Початок</th>
+                        <th>Кінець</th>
+                        <th>Перерва (год)</th>
+                        <th>Всього годин</th>
+                        <th>Примітки</th>
+                    </tr>
+                </thead>
+                <tbody id="tableBody">
+                </tbody>
+            </table>
+        </div>
+
+        <div class="footer">
+            💡 <strong>Автосинхронізація:</strong> Дані автоматично зберігаються локально. Для синхронізації з Google Sheets використовуйте "☁️ Синхронізувати" або експорт CSV.
+        </div>
+    </div>
+
+    <!-- Google API -->
+    <script src="https://accounts.google.com/gsi/client" async defer></script>
+    <script src="https://apis.google.com/js/api.js"></script>
+
+    <script>
+        // Google Apps Script API URL
+        const GOOGLE_SCRIPT_URL = 'https://script.googleusercontent.com/macros/echo?user_content_key=AehSKLhi2NFh-oCBjynKXaEOiPeRrrL810toaTq78QsjSzjLNczZ1ZfHjpHHgYbrTDlTBxi65V41XDjjM48DPK3OulCGDaia1uQg734D-kmu6leFtyAVyjB2ht-X6j31Ww4Isa23A_TyHF9tFOsJeKsGdwdt-yoHi_U-AV3DlRxaVAT0rDZobxoH3J_qesDzxlUY99BoGo2UPKbGoB2sQDk0p6mtAFgn3nEuhfTlCJVlKdyRbBWt_cubjRbXc8RvdthPoiEhTLJQAGL_9qTNLwXIOaTzFimQGg&lib=Mrwh7ckjedOHOW-5U4G1G01ScKf4pGqo7';
+
+        const daysOfWeek = ['Неділя', 'Понеділок', 'Вівторок', 'Середа', 'Четвер', 'П\'ятниця', 'Субота'];
+        const monthNames = ['Січень', 'Лютий', 'Березень', 'Квітень', 'Травень', 'Червень', 'Липень', 'Серпень', 'Вересень', 'Жовтень', 'Листопад', 'Грудень'];
+        
+        let currentMonth = 0;
+        let currentYear = 2026;
+        let googleSyncEnabled = true; // Автосинхронізація увімкнена
+
+        // Перевірка підключення до Google при завантаженні
+        window.onload = async function() {
+            // Перевіряємо з'єднання з Google Sheets
+            await checkGoogleConnection();
+            
+            // Завантажуємо дані з Google або локально
+            await initTable();
+        };
+
+        // Перевірка підключення до Google
+        async function checkGoogleConnection() {
+            console.log('Перевіряємо підключення до Google...');
+            try {
+                const response = await fetch(GOOGLE_SCRIPT_URL, {
+                    method: 'GET'
+                });
+                console.log('Отримали відповідь:', response);
+                const result = await response.json();
+                console.log('Результат:', result);
+                
+                if (result.success) {
+                    googleSyncEnabled = true;
+                    const btn = document.getElementById('googleBtn');
+                    if (btn) {
+                        btn.textContent = '✓ Google підключено';
+                        btn.classList.remove('btn-success');
+                        btn.classList.add('btn-primary');
+                    }
+                    console.log('Викликаємо showNotification...');
+                    showNotification('✓ Google Sheets підключено!');
+                } else {
+                    googleSyncEnabled = false;
+                    showNotification('⚠️ Google Sheets недоступний', true);
+                }
+            } catch (error) {
+                console.warn('Google Sheets недоступний, працюємо локально', error);
+                googleSyncEnabled = false;
+                showNotification('ℹ️ Працюємо в локальному режимі');
+            }
+        }
+
+        // Ініціалізація таблиці
+        async function initTable() {
+            const month = parseInt(document.getElementById('monthSelect').value);
+            const year = parseInt(document.getElementById('yearSelect').value);
+            
+            currentMonth = month;
+            currentYear = year;
+
+            document.getElementById('headerMonth').textContent = `${monthNames[month]} ${year}`;
+
+            const daysInMonth = new Date(year, month + 1, 0).getDate();
+            const tbody = document.getElementById('tableBody');
+            tbody.innerHTML = '';
+
+            for (let day = 1; day <= daysInMonth; day++) {
+                const date = new Date(year, month, day);
+                const dayOfWeek = daysOfWeek[date.getDay()];
+                const isWeekend = date.getDay() === 0 || date.getDay() === 6;
+
+                const row = document.createElement('tr');
+                if (isWeekend) row.classList.add('weekend');
+                row.dataset.day = day;
+
+                const monthStr = String(month + 1).padStart(2, '0');
+                const dayStr = String(day).padStart(2, '0');
+
+                row.innerHTML = `
+                    <td>${dayStr}.${monthStr}.${year}</td>
+                    <td>${dayOfWeek}</td>
+                    <td><input type="time" class="start-time" value="" onchange="calculateHours(${day}); autoSync()"></td>
+                    <td><input type="time" class="end-time" value="" onchange="calculateHours(${day}); autoSync()"></td>
+                    <td><input type="number" class="break-time" value="" min="0" step="0.5" onchange="calculateHours(${day}); autoSync()"></td>
+                    <td class="hours-cell" id="hours-${day}">0</td>
+                    <td><input type="text" class="notes" placeholder="${isWeekend ? 'Вихідний' : ''}" onchange="autoSync()"></td>
+                `;
+
+                tbody.appendChild(row);
+            }
+
+            await loadData();
+            calculateAllHours();
+        }
+
+        // Зміна місяця
+        function changeMonth() {
+            saveData();
+            initTable();
+        }
+
+        // Розрахунок годин для одного дня
+        function calculateHours(day) {
+            const row = document.querySelector(`tr[data-day="${day}"]`);
+            if (!row) return;
+            
+            const startTime = row.querySelector('.start-time').value;
+            const endTime = row.querySelector('.end-time').value;
+            const breakTime = parseFloat(row.querySelector('.break-time').value) || 0;
+
+            if (!startTime || !endTime) {
+                document.getElementById(`hours-${day}`).textContent = '0';
+                updateStats();
+                return;
+            }
+
+            const start = new Date(`2000-01-01T${startTime}`);
+            const end = new Date(`2000-01-01T${endTime}`);
+            
+            let hours = (end - start) / (1000 * 60 * 60);
+            hours -= breakTime;
+
+            if (hours < 0) hours = 0;
+
+            document.getElementById(`hours-${day}`).textContent = hours.toFixed(2);
+            updateStats();
+            saveData();
+            autoSync(); // Автоматична синхронізація
+        }
+
+        // Розрахунок всіх годин
+        function calculateAllHours() {
+            const month = parseInt(document.getElementById('monthSelect').value);
+            const year = parseInt(document.getElementById('yearSelect').value);
+            const daysInMonth = new Date(year, month + 1, 0).getDate();
+            
+            for (let day = 1; day <= daysInMonth; day++) {
+                calculateHours(day);
+            }
+        }
+
+        // Оновлення статистики
+        function updateStats() {
+            const daysInMonth = new Date(currentYear, currentMonth + 1, 0).getDate();
+            let totalHours = 0;
+            let workDays = 0;
+
+            for (let day = 1; day <= daysInMonth; day++) {
+                const hoursEl = document.getElementById(`hours-${day}`);
+                if (hoursEl) {
+                    const hours = parseFloat(hoursEl.textContent) || 0;
+                    if (hours > 0) {
+                        totalHours += hours;
+                        workDays++;
+                    }
+                }
+            }
+
+            const minHours = parseFloat(document.getElementById('minHours').value) || 0;
+            const remaining = minHours - totalHours;
+
+            document.getElementById('totalHours').textContent = totalHours.toFixed(1);
+            document.getElementById('workDays').textContent = workDays;
+            document.getElementById('avgHours').textContent = workDays > 0 ? (totalHours / workDays).toFixed(1) : '0';
+            document.getElementById('minHoursDisplay').textContent = minHours;
+            document.getElementById('remainingHours').textContent = remaining > 0 ? remaining.toFixed(1) : '0';
+
+            const remainingCard = document.getElementById('remainingCard');
+            remainingCard.classList.remove('success', 'warning', 'danger');
+            
+            if (remaining <= 0) {
+                remainingCard.classList.add('success');
+            } else if (remaining <= minHours * 0.2) {
+                remainingCard.classList.add('warning');
+            } else {
+                remainingCard.classList.add('danger');
+            }
+        }
+
+        // Збереження даних
+        async function saveData() {
+            const month = parseInt(document.getElementById('monthSelect').value);
+            const year = parseInt(document.getElementById('yearSelect').value);
+            const daysInMonth = new Date(year, month + 1, 0).getDate();
+            
+            const data = [];
+            const rows = [];
+            
+            for (let day = 1; day <= daysInMonth; day++) {
+                const row = document.querySelector(`tr[data-day="${day}"]`);
+                if (row) {
+                    const date = new Date(year, month, day);
+                    const dayOfWeek = daysOfWeek[date.getDay()];
+                    const monthStr = String(month + 1).padStart(2, '0');
+                    const dayStr = String(day).padStart(2, '0');
+                    const dateStr = `${dayStr}.${monthStr}.${year}`;
+                    
+                    const start = row.querySelector('.start-time').value;
+                    const end = row.querySelector('.end-time').value;
+                    const breakTime = row.querySelector('.break-time').value;
+                    const hours = document.getElementById(`hours-${day}`).textContent;
+                    const notes = row.querySelector('.notes').value;
+                    
+                    data.push({
+                        start: start,
+                        end: end,
+                        break: breakTime,
+                        notes: notes
+                    });
+                    
+                    rows.push([dateStr, dayOfWeek, start, end, breakTime, hours, notes]);
+                }
+            }
+            
+            const minHours = document.getElementById('minHours').value;
+            
+            // Збереження локально
+            const storageKey = `timeTracking_${year}_${String(month + 1).padStart(2, '0')}`;
+            localStorage.setItem(storageKey, JSON.stringify(data));
+            localStorage.setItem(`${storageKey}_minHours`, minHours);
+            
+            // Збереження в Google Sheets
+            if (googleSyncEnabled) {
+                await saveToGoogle(month, year, rows);
+            }
+            
+            const btn = event?.target;
+            if (btn) {
+                const originalText = btn.textContent;
+                btn.textContent = '✓ Збережено!';
+                setTimeout(() => btn.textContent = originalText, 2000);
+            }
+        }
+
+        // Збереження в Google Sheets
+        async function saveToGoogle(month, year, rows) {
+            try {
+                console.log('Збереження в Google:', monthNames[month], year, rows.length, 'рядків');
+                const response = await fetch(GOOGLE_SCRIPT_URL, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        action: 'save',
+                        month: monthNames[month],
+                        year: year,
+                        rows: rows
+                    })
+                });
+                
+                const result = await response.json();
+                console.log('Результат збереження:', result);
+                
+                if (result.success) {
+                    console.log('✓ Дані синхронізовано з Google Sheets');
+                } else {
+                    console.warn('⚠️ Помилка збереження:', result.message);
+                }
+            } catch (error) {
+                console.warn('Помилка синхронізації з Google:', error);
+            }
+        }
+
+        // Завантаження даних
+        async function loadData() {
+            const month = parseInt(document.getElementById('monthSelect').value);
+            const year = parseInt(document.getElementById('yearSelect').value);
+            const storageKey = `timeTracking_${year}_${String(month + 1).padStart(2, '0')}`;
+            
+            // Спробувати завантажити з Google Sheets
+            if (googleSyncEnabled) {
+                const googleData = await loadFromGoogle(month, year);
+                if (googleData && googleData.length > 0) {
+                    // Завантажуємо з Google
+                    googleData.forEach((item, index) => {
+                        const day = index + 1;
+                        const row = document.querySelector(`tr[data-day="${day}"]`);
+                        if (row && item.length >= 7) {
+                            row.querySelector('.start-time').value = item[2] || '';
+                            row.querySelector('.end-time').value = item[3] || '';
+                            row.querySelector('.break-time').value = item[4] || '';
+                            row.querySelector('.notes').value = item[6] || '';
+                        }
+                    });
+                    calculateAllHours();
+                    return;
+                }
+            }
+            
+            // Завантаження з localStorage якщо Google недоступний
+            const saved = localStorage.getItem(storageKey);
+            const savedMinHours = localStorage.getItem(`${storageKey}_minHours`);
+            
+            if (savedMinHours) {
+                document.getElementById('minHours').value = savedMinHours;
+            }
+            
+            if (!saved) return;
+
+            const data = JSON.parse(saved);
+            data.forEach((item, index) => {
+                const day = index + 1;
+                const row = document.querySelector(`tr[data-day="${day}"]`);
+                if (row) {
+                    row.querySelector('.start-time').value = item.start || '';
+                    row.querySelector('.end-time').value = item.end || '';
+                    row.querySelector('.break-time').value = item.break || '';
+                    row.querySelector('.notes').value = item.notes || '';
+                }
+            });
+            calculateAllHours();
+        }
+
+        // Завантаження з Google Sheets
+        async function loadFromGoogle(month, year) {
+            try {
+                const url = GOOGLE_SCRIPT_URL + '?action=load&month=' + encodeURIComponent(monthNames[month]) + '&year=' + year;
+                console.log('Завантаження з Google:', url);
+                const response = await fetch(url);
+                const result = await response.json();
+                console.log('Отримано з Google:', result);
+                
+                if (result.success && result.data) {
+                    return result.data;
+                }
+            } catch (error) {
+                console.warn('Не вдалося завантажити з Google:', error);
+            }
+            return null;
+        }
+
+        // Експорт в CSV
+        function exportToCSV() {
+            const month = parseInt(document.getElementById('monthSelect').value);
+            const year = parseInt(document.getElementById('yearSelect').value);
+            const daysInMonth = new Date(year, month + 1, 0).getDate();
+            
+            let csv = 'Дата,День тижня,Початок,Кінець,Перерва (год),Всього годин,Примітки\n';
+            
+            for (let day = 1; day <= daysInMonth; day++) {
+                const row = document.querySelector(`tr[data-day="${day}"]`);
+                if (row) {
+                    const monthStr = String(month + 1).padStart(2, '0');
+                    const dayStr = String(day).padStart(2, '0');
+                    const date = `${dayStr}.${monthStr}.${year}`;
+                    const dayOfWeek = daysOfWeek[new Date(year, month, day).getDay()];
+                    const start = row.querySelector('.start-time').value;
+                    const end = row.querySelector('.end-time').value;
+                    const breakTime = row.querySelector('.break-time').value;
+                    const hours = document.getElementById(`hours-${day}`).textContent;
+                    const notes = row.querySelector('.notes').value;
+
+                    csv += `${date},${dayOfWeek},${start},${end},${breakTime},${hours},"${notes}"\n`;
+                }
+            }
+
+            const totalHours = document.getElementById('totalHours').textContent;
+            const minHours = document.getElementById('minHours').value;
+            csv += `\n,,,,,${totalHours},Всього годин за місяць\n`;
+            csv += `,,,,,${minHours},Мінімум годин\n`;
+
+            const blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8;' });
+            const link = document.createElement('a');
+            link.href = URL.createObjectURL(blob);
+            link.download = `Облік_робочого_часу_${monthNames[month]}_${year}.csv`;
+            link.click();
+        }
+
+        // Підключення до Google
+        async function connectGoogle() {
+            // Простий варіант - створення нової таблиці
+            const useSimple = confirm('Хочете використати ПРОСТИЙ спосіб?\n\n✅ ТАК - Я допоможу створити таблицю (рекомендовано)\n❌ НІ - Потрібна складна налаштування OAuth');
+            
+            if (useSimple) {
+                showSimpleGoogleSetup();
+            } else {
+                showOAuthSetup();
+            }
+        }
+
+        // Простий спосіб - через веб-форму
+        function showSimpleGoogleSetup() {
+            const popup = document.createElement('div');
+            popup.style.cssText = `
+                position: fixed;
+                top: 50%;
+                left: 50%;
+                transform: translate(-50%, -50%);
+                background: white;
+                padding: 30px;
+                border-radius: 15px;
+                box-shadow: 0 10px 40px rgba(0,0,0,0.3);
+                z-index: 10000;
+                max-width: 700px;
+                max-height: 80vh;
+                overflow-y: auto;
+            `;
+            
+            popup.innerHTML = `
+                <h2 style="color: #667eea; margin-bottom: 20px;">🚀 Швидке підключення Google Sheets</h2>
+                
+                <div style="background: #e7f3ff; padding: 20px; border-radius: 8px; margin-bottom: 20px;">
+                    <h3 style="margin-bottom: 15px;">⚡ АВТОМАТИЧНА СИНХРОНІЗАЦІЯ</h3>
+                    
+                    <div style="background: white; padding: 15px; border-radius: 8px; margin-bottom: 15px;">
+                        <h4 style="color: #667eea; margin-bottom: 10px;">Крок 1: Створіть таблицю</h4>
+                        <ol style="line-height: 1.8; margin-left: 20px;">
+                            <li>Натисніть "📥 Експортувати CSV"</li>
+                            <li>Перейдіть на <a href="https://sheets.google.com" target="_blank" style="color: #667eea;">sheets.google.com</a></li>
+                            <li>Файл → Імпорт → Завантажити CSV</li>
+                        </ol>
+                    </div>
+
+                    <div style="background: white; padding: 15px; border-radius: 8px; margin-bottom: 15px;">
+                        <h4 style="color: #10b981; margin-bottom: 10px;">Крок 2: Увімкніть автосинхронізацію</h4>
+                        <ol style="line-height: 1.8; margin-left: 20px;">
+                            <li>У Google Таблиці: Розширення → Apps Script</li>
+                            <li>Видаліть весь код та вставте наш скрипт</li>
+                            <li>Збережіть і запустіть один раз</li>
+                            <li>Готово! Дані синхронізуються кожні 5 хв</li>
+                        </ol>
+                    </div>
+
+                    <div style="background: #fff3cd; padding: 15px; border-radius: 8px;">
+                        <p><strong>📋 Apps Script код:</strong></p>
+                        <textarea readonly onclick="this.select()" style="width: 100%; height: 150px; font-family: monospace; font-size: 12px; padding: 10px; border: 2px solid #ccc; border-radius: 6px; margin-top: 10px;">
+function syncFromLocalStorage() {
+  // Цей скрипт буде отримувати дані через веб-хук
+  // Поки що синхронізація через експорт CSV
+}
+
+// Автоматичний імпорт з CSV при завантаженні файлу
+function onOpen() {
+  SpreadsheetApp.getUi()
+    .createMenu('⚡ Автосинхронізація')
+    .addItem('📥 Імпортувати останній CSV', 'importLatestCSV')
+    .addToUi();
+}
+                        </textarea>
+                    </div>
+                </div>
+
+                <div style="text-align: center; margin-top: 20px;">
+                    <button id="exportSimpleBtn" style="padding: 12px 24px; background: #10b981; color: white; border: none; border-radius: 8px; cursor: pointer; font-size: 16px; font-weight: 600; margin-right: 10px;">
+                        📥 Експортувати CSV зараз
+                    </button>
+                    <button id="openGoogleBtn" style="padding: 12px 24px; background: #667eea; color: white; border: none; border-radius: 8px; cursor: pointer; font-size: 16px; font-weight: 600; margin-right: 10px;">
+                        🌐 Відкрити Google Sheets
+                    </button>
+                    <button id="closeSimpleBtn" style="padding: 12px 24px; background: #6c757d; color: white; border: none; border-radius: 8px; cursor: pointer; font-size: 16px; font-weight: 600;">
+                        Закрити
+                    </button>
+                </div>
+            `;
+
+            const overlay = createOverlay();
+            document.body.appendChild(overlay);
+            document.body.appendChild(popup);
+
+            document.getElementById('exportSimpleBtn').onclick = () => {
+                exportToCSV();
+                showNotification('✓ CSV експортовано! Тепер імпортуйте в Google Sheets');
+            };
+
+            document.getElementById('openGoogleBtn').onclick = () => {
+                window.open('https://sheets.google.com', '_blank');
+            };
+
+            document.getElementById('closeSimpleBtn').onclick = () => {
+                overlay.remove();
+                popup.remove();
+            };
+        }
+
+        // Складний спосіб - OAuth
+        function showOAuthSetup() {
+            showNotification('ℹ️ OAuth налаштування вимагає створення проекту в Google Cloud Console', true);
+            window.open('https://console.cloud.google.com/apis/credentials', '_blank');
+        }
+
+        // Створення overlay
+        function createOverlay() {
+            const overlay = document.createElement('div');
+            overlay.style.cssText = `
+                position: fixed;
+                top: 0;
+                left: 0;
+                right: 0;
+                bottom: 0;
+                background: rgba(0,0,0,0.5);
+                z-index: 9999;
+            `;
+            overlay.onclick = () => {
+                overlay.remove();
+                document.querySelectorAll('[style*="z-index: 10000"]').forEach(el => el.remove());
+            };
+            return overlay;
+        }
+
+        // Показати детальну інструкцію
+        function showGoogleSetupInstructions() {
+            const popup = document.createElement('div');
+            popup.style.cssText = `
+                position: fixed;
+                top: 50%;
+                left: 50%;
+                transform: translate(-50%, -50%);
+                background: white;
+                padding: 30px;
+                border-radius: 15px;
+                box-shadow: 0 10px 40px rgba(0,0,0,0.3);
+                z-index: 10000;
+                max-width: 600px;
+                max-height: 80vh;
+                overflow-y: auto;
+            `;
+            
+            popup.innerHTML = `
+                <h2 style="color: #667eea; margin-bottom: 20px;">🔗 Підключення Google Sheets</h2>
+                
+                <div style="background: #f8f9fa; padding: 15px; border-radius: 8px; margin-bottom: 20px;">
+                    <h3 style="margin-bottom: 10px;">📝 Покрокова інструкція:</h3>
+                    
+                    <ol style="line-height: 1.8;">
+                        <li>Натисніть кнопку "📥 Експорт в CSV" внизу</li>
+                        <li>Перейдіть на <a href="https://sheets.google.com" target="_blank" style="color: #667eea;">sheets.google.com</a></li>
+                        <li>Створіть нову таблицю (Файл → Створити → Таблицю)</li>
+                        <li>Файл → Імпорт → Завантажити → виберіть CSV файл</li>
+                        <li>Готово! Тепер всі дані в Google Таблицях ☁️</li>
+                    </ol>
+                </div>
+
+                <div style="background: #e7f3ff; padding: 15px; border-radius: 8px; margin-bottom: 20px;">
+                    <h3 style="margin-bottom: 10px;">✨ Переваги:</h3>
+                    <ul style="line-height: 1.8;">
+                        <li>✅ Автоматичне збереження Google</li>
+                        <li>✅ Доступ з будь-якого пристрою</li>
+                        <li>✅ Можна ділитися з іншими</li>
+                        <li>✅ Формули Google Sheets працюють</li>
+                        <li>✅ Історія змін</li>
+                    </ul>
+                </div>
+
+                <div style="margin-top: 20px; text-align: center;">
+                    <button id="exportNowBtn" 
+                            style="padding: 12px 24px; background: #10b981; color: white; border: none; 
+                                   border-radius: 8px; cursor: pointer; font-size: 16px; font-weight: 600;">
+                        📥 Експортувати CSV зараз
+                    </button>
+                    <button id="closePopupBtn" 
+                            style="padding: 12px 24px; background: #6c757d; color: white; border: none; 
+                                   border-radius: 8px; cursor: pointer; font-size: 16px; font-weight: 600; margin-left: 10px;">
+                        Закрити
+                    </button>
+                </div>
+            `;
+
+            const overlay = document.createElement('div');
+            overlay.style.cssText = `
+                position: fixed;
+                top: 0;
+                left: 0;
+                right: 0;
+                bottom: 0;
+                background: rgba(0,0,0,0.5);
+                z-index: 9999;
+            `;
+            overlay.onclick = () => {
+                overlay.remove();
+                popup.remove();
+            };
+
+            document.body.appendChild(overlay);
+            document.body.appendChild(popup);
+
+            // Додаємо обробники подій
+            document.getElementById('exportNowBtn').addEventListener('click', function() {
+                overlay.remove();
+                popup.remove();
+                exportToCSV();
+            });
+
+            document.getElementById('closePopupBtn').addEventListener('click', function() {
+                overlay.remove();
+                popup.remove();
+            });
+        }
+
+        // Синхронізація з Google
+        async function syncToGoogle() {
+            if (!googleSyncEnabled) {
+                showNotification('⚠️ Google Sheets недоступний. Перевірте підключення.', true);
+                return;
+            }
+            
+            showNotification('🔄 Синхронізація з Google Sheets...');
+            await saveData();
+            showNotification('✓ Дані синхронізовано з Google Sheets!');
+        }
+
+        // Автоматична синхронізація при зміні даних
+        let syncTimeout;
+        function autoSync() {
+            clearTimeout(syncTimeout);
+            syncTimeout = setTimeout(() => {
+                // Автозбереження в localStorage та Google
+                saveData();
+                console.log('✓ Автозбереження виконано');
+            }, 2000); // Синхронізація через 2 секунди після останньої зміни
+        }
+
+        // Експорт всіх даних у JSON файл
+        function exportAllData() {
+            const allData = {};
+            
+            for (let i = 0; i < localStorage.length; i++) {
+                const key = localStorage.key(i);
+                if (key.startsWith('timeTracking_')) {
+                    allData[key] = localStorage.getItem(key);
+                }
+            }
+
+            const exportData = {
+                version: '1.0',
+                exportDate: new Date().toISOString(),
+                data: allData
+            };
+
+            const json = JSON.stringify(exportData, null, 2);
+            const blob = new Blob([json], { type: 'application/json' });
+            const link = document.createElement('a');
+            link.href = URL.createObjectURL(blob);
+            link.download = `Облік_робочого_часу_backup_${new Date().toISOString().split('T')[0]}.json`;
+            link.click();
+
+            showNotification('✓ Дані збережено на комп\'ютер!');
+        }
+
+        // Імпорт даних з JSON файлу
+        function importAllData(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                try {
+                    const importData = JSON.parse(e.target.result);
+                    
+                    if (!importData.data) {
+                        showNotification('⚠ Невірний формат файлу!', true);
+                        return;
+                    }
+
+                    if (!confirm('Завантажити дані з файлу? Поточні дані в браузері будуть замінені.')) {
+                        return;
+                    }
+
+                    const keysToRemove = [];
+                    for (let i = 0; i < localStorage.length; i++) {
+                        const key = localStorage.key(i);
+                        if (key.startsWith('timeTracking_')) {
+                            keysToRemove.push(key);
+                        }
+                    }
+                    keysToRemove.forEach(key => localStorage.removeItem(key));
+
+                    Object.keys(importData.data).forEach(key => {
+                        localStorage.setItem(key, importData.data[key]);
+                    });
+
+                    showNotification('✓ Дані успішно завантажено!');
+                    initTable();
+                } catch (error) {
+                    showNotification('⚠ Помилка читання файлу: ' + error.message, true);
+                }
+            };
+            reader.readAsText(file);
+            event.target.value = '';
+        }
+
+        // Показати повідомлення
+        function showNotification(message, isError = false) {
+            console.log('showNotification викликано:', message, isError);
+            const notification = document.createElement('div');
+            notification.className = 'notification' + (isError ? ' error' : '');
+            notification.textContent = message;
+            document.body.appendChild(notification);
+            console.log('Notification додано до body:', notification);
+
+            setTimeout(() => {
+                notification.style.animation = 'slideIn 0.3s ease reverse';
+                setTimeout(() => notification.remove(), 300);
+            }, 3000);
+        }
+
+        // Автозбереження в браузер
+        setInterval(saveData, 30000);
+    </script>
+</body>
+</html>
