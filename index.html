@@ -402,58 +402,78 @@
         </div>
     </div>
 
-    <!-- Google API -->
-    <script src="https://accounts.google.com/gsi/client" async defer></script>
-    <script src="https://apis.google.com/js/api.js"></script>
-
+    <!-- Firebase SDK -->
+    <script type="module">
+        import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js';
+        import { getDatabase, ref, set, get, onValue } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js';
+        
+        // Firebase configuration
+        const firebaseConfig = {
+            apiKey: "AIzaSyBjusHy-xqg8FA8LjsGHK8DJFm4eJppDHM",
+            authDomain: "work-time-a7236.firebaseapp.com",
+            databaseURL: "https://work-time-a7236-default-rtdb.europe-west1.firebasedatabase.app",
+            projectId: "work-time-a7236",
+            storageBucket: "work-time-a7236.firebasestorage.app",
+            messagingSenderId: "68175538100",
+            appId: "1:68175538100:web:bdb96fe020af7c3e59f4e1"
+        };
+        
+        // Initialize Firebase
+        const app = initializeApp(firebaseConfig);
+        const database = getDatabase(app);
+        
+        // Експорт для глобального використання
+        window.firebaseDB = database;
+        window.firebaseRef = ref;
+        window.firebaseSet = set;
+        window.firebaseGet = get;
+        window.firebaseOnValue = onValue;
+    </script>
+    
     <script>
-        // Google Apps Script API URL
-        const GOOGLE_SCRIPT_URL = 'https://script.googleusercontent.com/macros/echo?user_content_key=AehSKLhi2NFh-oCBjynKXaEOiPeRrrL810toaTq78QsjSzjLNczZ1ZfHjpHHgYbrTDlTBxi65V41XDjjM48DPK3OulCGDaia1uQg734D-kmu6leFtyAVyjB2ht-X6j31Ww4Isa23A_TyHF9tFOsJeKsGdwdt-yoHi_U-AV3DlRxaVAT0rDZobxoH3J_qesDzxlUY99BoGo2UPKbGoB2sQDk0p6mtAFgn3nEuhfTlCJVlKdyRbBWt_cubjRbXc8RvdthPoiEhTLJQAGL_9qTNLwXIOaTzFimQGg&lib=Mrwh7ckjedOHOW-5U4G1G01ScKf4pGqo7';
-
         const daysOfWeek = ['Неділя', 'Понеділок', 'Вівторок', 'Середа', 'Четвер', 'П\'ятниця', 'Субота'];
         const monthNames = ['Січень', 'Лютий', 'Березень', 'Квітень', 'Травень', 'Червень', 'Липень', 'Серпень', 'Вересень', 'Жовтень', 'Листопад', 'Грудень'];
         
         let currentMonth = 0;
         let currentYear = 2026;
-        let googleSyncEnabled = true; // Автосинхронізація увімкнена
+        let firebaseSyncEnabled = true; // Firebase автосинхронізація увімкнена
 
-        // Перевірка підключення до Google при завантаженні
+        // Перевірка підключення до Firebase при завантаженні
         window.onload = async function() {
-            // Перевіряємо з'єднання з Google Sheets
-            await checkGoogleConnection();
+            // Чекаємо завантаження Firebase
+            await new Promise(resolve => setTimeout(resolve, 500));
             
-            // Завантажуємо дані з Google або локально
+            // Перевіряємо з'єднання з Firebase
+            await checkFirebaseConnection();
+            
+            // Завантажуємо дані з Firebase або локально
             await initTable();
         };
 
-        // Перевірка підключення до Google
-        async function checkGoogleConnection() {
-            console.log('Перевіряємо підключення до Google...');
+        // Перевірка підключення до Firebase
+        async function checkFirebaseConnection() {
+            console.log('Перевіряємо підключення до Firebase...');
             try {
-                const response = await fetch(GOOGLE_SCRIPT_URL, {
-                    method: 'GET'
-                });
-                console.log('Отримали відповідь:', response);
-                const result = await response.json();
-                console.log('Результат:', result);
-                
-                if (result.success) {
-                    googleSyncEnabled = true;
+                if (window.firebaseDB) {
+                    // Тестовий запит до Firebase
+                    const testRef = window.firebaseRef(window.firebaseDB, 'test');
+                    await window.firebaseSet(testRef, { connected: true, time: Date.now() });
+                    
+                    firebaseSyncEnabled = true;
                     const btn = document.getElementById('googleBtn');
                     if (btn) {
-                        btn.textContent = '✓ Google підключено';
+                        btn.textContent = '✓ Firebase підключено';
                         btn.classList.remove('btn-success');
                         btn.classList.add('btn-primary');
                     }
-                    console.log('Викликаємо showNotification...');
-                    showNotification('✓ Google Sheets підключено!');
+                    console.log('Firebase підключено успішно!');
+                    showNotification('✓ Firebase підключено! Дані синхронізуються автоматично');
                 } else {
-                    googleSyncEnabled = false;
-                    showNotification('⚠️ Google Sheets недоступний', true);
+                    throw new Error('Firebase не ініціалізовано');
                 }
             } catch (error) {
-                console.warn('Google Sheets недоступний, працюємо локально', error);
-                googleSyncEnabled = false;
+                console.warn('Firebase недоступний, працюємо локально', error);
+                firebaseSyncEnabled = false;
                 showNotification('ℹ️ Працюємо в локальному режимі');
             }
         }
@@ -627,9 +647,9 @@
             localStorage.setItem(storageKey, JSON.stringify(data));
             localStorage.setItem(`${storageKey}_minHours`, minHours);
             
-            // Збереження в Google Sheets
-            if (googleSyncEnabled) {
-                await saveToGoogle(month, year, rows);
+            // Синхронізація з Firebase
+            if (firebaseSyncEnabled) {
+                await saveToFirebase(month, year, rows);
             }
             
             const btn = event?.target;
@@ -640,33 +660,26 @@
             }
         }
 
-        // Збереження в Google Sheets
-        async function saveToGoogle(month, year, rows) {
+        // Збереження в Firebase
+        async function saveToFirebase(month, year, rows) {
             try {
-                console.log('Збереження в Google:', monthNames[month], year, rows.length, 'рядків');
-                const response = await fetch(GOOGLE_SCRIPT_URL, {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                    },
-                    body: JSON.stringify({
-                        action: 'save',
-                        month: monthNames[month],
-                        year: year,
-                        rows: rows
-                    })
+                if (!window.firebaseDB || !firebaseSyncEnabled) {
+                    console.log('Firebase недоступний, пропускаємо синхронізацію');
+                    return;
+                }
+                
+                console.log('Збереження в Firebase:', monthNames[month], year, rows.length, 'рядків');
+                const dataRef = window.firebaseRef(window.firebaseDB, `timeTracking/${year}/${month}`);
+                await window.firebaseSet(dataRef, {
+                    month: monthNames[month],
+                    year: year,
+                    rows: rows,
+                    updatedAt: Date.now()
                 });
                 
-                const result = await response.json();
-                console.log('Результат збереження:', result);
-                
-                if (result.success) {
-                    console.log('✓ Дані синхронізовано з Google Sheets');
-                } else {
-                    console.warn('⚠️ Помилка збереження:', result.message);
-                }
+                console.log('✓ Дані синхронізовано з Firebase');
             } catch (error) {
-                console.warn('Помилка синхронізації з Google:', error);
+                console.warn('Помилка синхронізації з Firebase:', error);
             }
         }
 
@@ -676,12 +689,12 @@
             const year = parseInt(document.getElementById('yearSelect').value);
             const storageKey = `timeTracking_${year}_${String(month + 1).padStart(2, '0')}`;
             
-            // Спробувати завантажити з Google Sheets
-            if (googleSyncEnabled) {
-                const googleData = await loadFromGoogle(month, year);
-                if (googleData && googleData.length > 0) {
-                    // Завантажуємо з Google
-                    googleData.forEach((item, index) => {
+            // Спробувати завантажити з Firebase
+            if (firebaseSyncEnabled) {
+                const firebaseData = await loadFromFirebase(month, year);
+                if (firebaseData && firebaseData.length > 0) {
+                    // Завантажуємо з Firebase
+                    firebaseData.forEach((item, index) => {
                         const day = index + 1;
                         const row = document.querySelector(`tr[data-day="${day}"]`);
                         if (row && item.length >= 7) {
@@ -720,20 +733,25 @@
             calculateAllHours();
         }
 
-        // Завантаження з Google Sheets
-        async function loadFromGoogle(month, year) {
+        // Завантаження з Firebase
+        async function loadFromFirebase(month, year) {
             try {
-                const url = GOOGLE_SCRIPT_URL + '?action=load&month=' + encodeURIComponent(monthNames[month]) + '&year=' + year;
-                console.log('Завантаження з Google:', url);
-                const response = await fetch(url);
-                const result = await response.json();
-                console.log('Отримано з Google:', result);
+                if (!window.firebaseDB || !firebaseSyncEnabled) {
+                    console.log('Firebase недоступний, завантажуємо локально');
+                    return null;
+                }
                 
-                if (result.success && result.data) {
-                    return result.data;
+                console.log('Завантаження з Firebase:', monthNames[month], year);
+                const dataRef = window.firebaseRef(window.firebaseDB, `timeTracking/${year}/${month}`);
+                const snapshot = await window.firebaseGet(dataRef);
+                
+                if (snapshot.exists()) {
+                    const data = snapshot.val();
+                    console.log('Отримано з Firebase:', data);
+                    return data.rows || null;
                 }
             } catch (error) {
-                console.warn('Не вдалося завантажити з Google:', error);
+                console.warn('Не вдалося завантажити з Firebase:', error);
             }
             return null;
         }
