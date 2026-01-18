@@ -383,7 +383,8 @@
                         <th>День тижня</th>
                         <th>Початок</th>
                         <th>Кінець</th>
-                        <th>Перерва (год)</th>
+                        <th>Пауза початок</th>
+                        <th>Пауза кінець</th>
                         <th>Всього годин</th>
                         <th>Примітки</th>
                     </tr>
@@ -505,7 +506,8 @@
                     <td>${dayOfWeek}</td>
                     <td><input type="time" class="start-time" value="" onchange="calculateHours(${day}); autoSync()"></td>
                     <td><input type="time" class="end-time" value="" onchange="calculateHours(${day}); autoSync()"></td>
-                    <td><input type="number" class="break-time" value="" min="0" step="0.5" onchange="calculateHours(${day}); autoSync()"></td>
+                    <td><input type="time" class="break-start" value="" onchange="calculateHours(${day}); autoSync()"></td>
+                    <td><input type="time" class="break-end" value="" onchange="calculateHours(${day}); autoSync()"></td>
                     <td class="hours-cell" id="hours-${day}">0</td>
                     <td><input type="text" class="notes" placeholder="${isWeekend ? 'Вихідний' : ''}" onchange="autoSync()"></td>
                 `;
@@ -530,7 +532,16 @@
             
             const startTime = row.querySelector('.start-time').value;
             const endTime = row.querySelector('.end-time').value;
-            const breakTime = parseFloat(row.querySelector('.break-time').value) || 0;
+            const breakStart = row.querySelector('.break-start').value;
+            const breakEnd = row.querySelector('.break-end').value;
+            
+            let breakHours = 0;
+            if (breakStart && breakEnd) {
+                const [bsH, bsM] = breakStart.split(':').map(Number);
+                const [beH, beM] = breakEnd.split(':').map(Number);
+                breakHours = ((beH * 60 + beM) - (bsH * 60 + bsM)) / 60;
+            }
+            const breakTime = breakHours;
 
             if (!startTime || !endTime) {
                 document.getElementById(`hours-${day}`).textContent = '0';
@@ -620,18 +631,20 @@
                     
                     const start = row.querySelector('.start-time').value;
                     const end = row.querySelector('.end-time').value;
-                    const breakTime = row.querySelector('.break-time').value;
+                    const breakStart = row.querySelector('.break-start').value;
+                    const breakEnd = row.querySelector('.break-end').value;
                     const hours = document.getElementById(`hours-${day}`).textContent;
                     const notes = row.querySelector('.notes').value;
                     
                     data.push({
                         start: start,
                         end: end,
-                        break: breakTime,
+                        breakStart: breakStart,
+                        breakEnd: breakEnd,
                         notes: notes
                     });
                     
-                    rows.push([dateStr, dayOfWeek, start, end, breakTime, hours, notes]);
+                    rows.push([dateStr, dayOfWeek, start, end, breakStart, breakEnd, hours, notes]);
                 }
             }
             
@@ -692,11 +705,12 @@
                     firebaseData.forEach((item, index) => {
                         const day = index + 1;
                         const row = document.querySelector(`tr[data-day="${day}"]`);
-                        if (row && item.length >= 7) {
+                        if (row && item.length >= 8) {
                             row.querySelector('.start-time').value = item[2] || '';
                             row.querySelector('.end-time').value = item[3] || '';
-                            row.querySelector('.break-time').value = item[4] || '';
-                            row.querySelector('.notes').value = item[6] || '';
+                            row.querySelector('.break-start').value = item[4] || '';
+                            row.querySelector('.break-end').value = item[5] || '';
+                            row.querySelector('.notes').value = item[7] || '';
                         }
                     });
                     calculateAllHours();
@@ -721,7 +735,8 @@
                 if (row) {
                     row.querySelector('.start-time').value = item.start || '';
                     row.querySelector('.end-time').value = item.end || '';
-                    row.querySelector('.break-time').value = item.break || '';
+                    row.querySelector('.break-start').value = item.breakStart || '';
+                    row.querySelector('.break-end').value = item.breakEnd || '';
                     row.querySelector('.notes').value = item.notes || '';
                 }
             });
@@ -757,7 +772,7 @@
             const year = parseInt(document.getElementById('yearSelect').value);
             const daysInMonth = new Date(year, month + 1, 0).getDate();
             
-            let csv = 'Дата,День тижня,Початок,Кінець,Перерва (год),Всього годин,Примітки\n';
+            let csv = 'Дата,День тижня,Початок,Кінець,Пауза початок,Пауза кінець,Всього годин,Примітки\n';
             
             for (let day = 1; day <= daysInMonth; day++) {
                 const row = document.querySelector(`tr[data-day="${day}"]`);
@@ -768,18 +783,19 @@
                     const dayOfWeek = daysOfWeek[new Date(year, month, day).getDay()];
                     const start = row.querySelector('.start-time').value;
                     const end = row.querySelector('.end-time').value;
-                    const breakTime = row.querySelector('.break-time').value;
+                    const breakStart = row.querySelector('.break-start').value;
+                    const breakEnd = row.querySelector('.break-end').value;
                     const hours = document.getElementById(`hours-${day}`).textContent;
                     const notes = row.querySelector('.notes').value;
 
-                    csv += `${date},${dayOfWeek},${start},${end},${breakTime},${hours},"${notes}"\n`;
+                    csv += `${date},${dayOfWeek},${start},${end},${breakStart},${breakEnd},${hours},"${notes}"\n`;
                 }
             }
 
             const totalHours = document.getElementById('totalHours').textContent;
             const minHours = document.getElementById('minHours').value;
-            csv += `\n,,,,,${totalHours},Всього годин за місяць\n`;
-            csv += `,,,,,${minHours},Мінімум годин\n`;
+            csv += `\n,,,,,,${totalHours},Всього годин за місяць\n`;
+            csv += `,,,,,,${minHours},Мінімум годин\n`;
 
             const blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8;' });
             const link = document.createElement('a');
