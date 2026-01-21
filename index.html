@@ -229,6 +229,29 @@
             background: #ffe5e5;
         }
 
+        td {
+            position: relative;
+        }
+
+        td::before {
+            content: attr(data-label);
+            position: absolute;
+            top: -2px;
+            left: 10px;
+            font-size: 11px;
+            color: #667eea;
+            background: white;
+            padding: 0 4px;
+            font-weight: 600;
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.2s;
+        }
+
+        td:has(input:focus)::before {
+            opacity: 1;
+        }
+
         input[type="time"],
         input[type="number"],
         input[type="text"] {
@@ -520,12 +543,12 @@
                 row.innerHTML = `
                     <td>${dayStr}.${monthStr}.${year}</td>
                     <td>${dayOfWeek}</td>
-                    <td><input type="time" class="start-time" value="" onchange="calculateHours(${day}); autoSync()"></td>
-                    <td><input type="time" class="end-time" value="" onchange="calculateHours(${day}); autoSync()"></td>
-                    <td><input type="time" class="break-start" value="" onchange="calculateHours(${day}); autoSync()"></td>
-                    <td><input type="time" class="break-end" value="" onchange="calculateHours(${day}); autoSync()"></td>
+                    <td data-label="⏰ Початок"><input type="time" class="start-time" value="" onchange="calculateHours(${day}); autoSync()"></td>
+                    <td data-label="🏁 Кінець"><input type="time" class="end-time" value="" onchange="calculateHours(${day}); autoSync()"></td>
+                    <td data-label="☕ Пауза початок"><input type="time" class="break-start" value="" onchange="calculateHours(${day}); autoSync()"></td>
+                    <td data-label="☕ Пауза кінець"><input type="time" class="break-end" value="" onchange="calculateHours(${day}); autoSync()"></td>
                     <td class="hours-cell" id="hours-${day}">0</td>
-                    <td><input type="text" class="notes" placeholder="${isWeekend ? 'Вихідний' : ''}" onchange="autoSync()"></td>
+                    <td data-label="📝 Примітки"><input type="text" class="notes" placeholder="${isWeekend ? 'Вихідний' : ''}" onchange="autoSync()"></td>
                 `;
 
                 tbody.appendChild(row);
