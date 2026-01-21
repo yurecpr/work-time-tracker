@@ -316,7 +316,6 @@
     <div class="container">
         <div class="header">
             <h1>📊 Облік робочого часу</h1>
-            <p style="font-size: 1.3em; margin: 10px 0; opacity: 0.95;">Наталії Болгариної</p>
             <p id="headerMonth">Січень 2026</p>
         </div>
 
@@ -350,8 +349,10 @@
         </div>
 
         <div class="controls">
+            <button class="btn btn-primary" onclick="saveData()">💾 Зберегти локально</button>
             <button class="btn btn-success" id="googleBtn" onclick="connectGoogle()">🔗 Підключити Google Sheets</button>
             <button class="btn btn-success" id="syncBtn" onclick="syncToGoogle()" style="display:none">☁️ Синхронізувати з Google</button>
+            <button class="btn btn-success" onclick="exportToCSV()">📥 Експорт в CSV</button>
             <button class="btn btn-info" onclick="window.print()">🖨️ Друк</button>
         </div>
 
@@ -363,6 +364,10 @@
             <div class="stat-card">
                 <h3>Робочих днів</h3>
                 <div class="value" id="workDays">0</div>
+            </div>
+            <div class="stat-card">
+                <h3>Середньо годин/день</h3>
+                <div class="value" id="avgHours">0</div>
             </div>
             <div class="stat-card" id="minHoursCard">
                 <h3>Мінімум на місяць</h3>
@@ -382,8 +387,7 @@
                         <th>День тижня</th>
                         <th>Початок</th>
                         <th>Кінець</th>
-                        <th>Пауза початок</th>
-                        <th>Пауза кінець</th>
+                        <th>Перерва (год)</th>
                         <th>Всього годин</th>
                         <th>Примітки</th>
                     </tr>
@@ -394,82 +398,62 @@
         </div>
 
         <div class="footer">
-            Створено з любов'ю <a href="https://github.com/yurecpr" target="_blank" style="color: #667eea; text-decoration: none; font-weight: bold;">yurecpr</a> для коханої дружини ❤️
+            💡 <strong>Автосинхронізація:</strong> Дані автоматично зберігаються локально. Для синхронізації з Google Sheets використовуйте "☁️ Синхронізувати" або експорт CSV.
         </div>
     </div>
 
-    <!-- Firebase SDK -->
-    <script type="module">
-        import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js';
-        import { getDatabase, ref, set, get, onValue } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js';
-        
-        // Firebase configuration
-        const firebaseConfig = {
-            apiKey: "AIzaSyBjusHy-xqg8FA8LjsGHK8DJFm4eJppDHM",
-            authDomain: "work-time-a7236.firebaseapp.com",
-            databaseURL: "https://work-time-a7236-default-rtdb.europe-west1.firebasedatabase.app",
-            projectId: "work-time-a7236",
-            storageBucket: "work-time-a7236.firebasestorage.app",
-            messagingSenderId: "68175538100",
-            appId: "1:68175538100:web:bdb96fe020af7c3e59f4e1"
-        };
-        
-        // Initialize Firebase
-        const app = initializeApp(firebaseConfig);
-        const database = getDatabase(app);
-        
-        // Експорт для глобального використання
-        window.firebaseDB = database;
-        window.firebaseRef = ref;
-        window.firebaseSet = set;
-        window.firebaseGet = get;
-        window.firebaseOnValue = onValue;
-    </script>
-    
+    <!-- Google API -->
+    <script src="https://accounts.google.com/gsi/client" async defer></script>
+    <script src="https://apis.google.com/js/api.js"></script>
+
     <script>
+        // Google Apps Script API URL
+        const GOOGLE_SCRIPT_URL = 'https://script.googleusercontent.com/macros/echo?user_content_key=AehSKLhi2NFh-oCBjynKXaEOiPeRrrL810toaTq78QsjSzjLNczZ1ZfHjpHHgYbrTDlTBxi65V41XDjjM48DPK3OulCGDaia1uQg734D-kmu6leFtyAVyjB2ht-X6j31Ww4Isa23A_TyHF9tFOsJeKsGdwdt-yoHi_U-AV3DlRxaVAT0rDZobxoH3J_qesDzxlUY99BoGo2UPKbGoB2sQDk0p6mtAFgn3nEuhfTlCJVlKdyRbBWt_cubjRbXc8RvdthPoiEhTLJQAGL_9qTNLwXIOaTzFimQGg&lib=Mrwh7ckjedOHOW-5U4G1G01ScKf4pGqo7';
+
         const daysOfWeek = ['Неділя', 'Понеділок', 'Вівторок', 'Середа', 'Четвер', 'П\'ятниця', 'Субота'];
         const monthNames = ['Січень', 'Лютий', 'Березень', 'Квітень', 'Травень', 'Червень', 'Липень', 'Серпень', 'Вересень', 'Жовтень', 'Листопад', 'Грудень'];
         
-        let currentMonth = null; // Буде встановлено в initTable()
-        let currentYear = null; // Буде встановлено в initTable()
-        let firebaseSyncEnabled = true; // Firebase автосинхронізація увімкнена
+        let currentMonth = 0;
+        let currentYear = 2026;
+        let googleSyncEnabled = true; // Автосинхронізація увімкнена
 
-        // Перевірка підключення до Firebase при завантаженні
+        // Перевірка підключення до Google при завантаженні
         window.onload = async function() {
-            // Чекаємо завантаження Firebase
-            await new Promise(resolve => setTimeout(resolve, 500));
+            // Перевіряємо з'єднання з Google Sheets
+            await checkGoogleConnection();
             
-            // Перевіряємо з'єднання з Firebase
-            await checkFirebaseConnection();
-            
-            // Завантажуємо дані з Firebase або локально
+            // Завантажуємо дані з Google або локально
             await initTable();
         };
 
-        // Перевірка підключення до Firebase
-        async function checkFirebaseConnection() {
-            console.log('Перевіряємо підключення до Firebase...');
+        // Перевірка підключення до Google
+        async function checkGoogleConnection() {
+            console.log('Перевіряємо підключення до Google...');
             try {
-                if (window.firebaseDB) {
-                    // Тестовий запит до Firebase
-                    const testRef = window.firebaseRef(window.firebaseDB, 'test');
-                    await window.firebaseSet(testRef, { connected: true, time: Date.now() });
-                    
-                    firebaseSyncEnabled = true;
+                const response = await fetch(GOOGLE_SCRIPT_URL, {
+                    method: 'GET'
+                });
+                console.log('Отримали відповідь:', response);
+                const result = await response.json();
+                console.log('Результат:', result);
+                
+                if (result.success) {
+                    googleSyncEnabled = true;
                     const btn = document.getElementById('googleBtn');
                     if (btn) {
-                        btn.textContent = '✓ Firebase підключено';
+                        btn.textContent = '✓ Google підключено';
                         btn.classList.remove('btn-success');
                         btn.classList.add('btn-primary');
                     }
-                    console.log('Firebase підключено успішно!');
-                    showNotification('✓ Firebase підключено! Дані синхронізуються автоматично');
+                    console.log('Викликаємо showNotification...');
+                    showNotification('✓ Google Sheets підключено!');
                 } else {
-                    throw new Error('Firebase не ініціалізовано');
+                    googleSyncEnabled = false;
+                    showNotification('⚠️ Google Sheets недоступний', true);
                 }
             } catch (error) {
-                console.warn('Firebase недоступний, працюємо локально', error);
-                firebaseSyncEnabled = false;
+                console.warn('Google Sheets недоступний, працюємо локально', error);
+                googleSyncEnabled = false;
                 showNotification('ℹ️ Працюємо в локальному режимі');
             }
         }
@@ -505,8 +489,7 @@
                     <td>${dayOfWeek}</td>
                     <td><input type="time" class="start-time" value="" onchange="calculateHours(${day}); autoSync()"></td>
                     <td><input type="time" class="end-time" value="" onchange="calculateHours(${day}); autoSync()"></td>
-                    <td><input type="time" class="break-start" value="" onchange="calculateHours(${day}); autoSync()"></td>
-                    <td><input type="time" class="break-end" value="" onchange="calculateHours(${day}); autoSync()"></td>
+                    <td><input type="number" class="break-time" value="" min="0" step="0.5" onchange="calculateHours(${day}); autoSync()"></td>
                     <td class="hours-cell" id="hours-${day}">0</td>
                     <td><input type="text" class="notes" placeholder="${isWeekend ? 'Вихідний' : ''}" onchange="autoSync()"></td>
                 `;
@@ -519,58 +502,9 @@
         }
 
         // Зміна місяця
-        async function changeMonth() {
-            // Зберігаємо поточні дані з СТАРИМИ значеннями місяця/року (ДО оновлення currentMonth/currentYear)
-            const oldMonth = currentMonth;
-            const oldYear = currentYear;
-            
-            if (oldMonth !== null && oldYear !== null) {
-                const daysInMonth = new Date(oldYear, oldMonth + 1, 0).getDate();
-                
-                const data = [];
-                const rows = [];
-                
-                for (let day = 1; day <= daysInMonth; day++) {
-                    const row = document.querySelector(`tr[data-day="${day}"]`);
-                    if (row) {
-                        const date = new Date(oldYear, oldMonth, day);
-                        const dayOfWeek = daysOfWeek[date.getDay()];
-                        const monthStr = String(oldMonth + 1).padStart(2, '0');
-                        const dayStr = String(day).padStart(2, '0');
-                        const dateStr = `${dayStr}.${monthStr}.${oldYear}`;
-                        
-                        const start = row.querySelector('.start-time').value;
-                        const end = row.querySelector('.end-time').value;
-                        const breakStart = row.querySelector('.break-start').value;
-                        const breakEnd = row.querySelector('.break-end').value;
-                        const hours = document.getElementById(`hours-${day}`).textContent;
-                        const notes = row.querySelector('.notes').value;
-                        
-                        data.push({
-                            start: start,
-                            end: end,
-                            breakStart: breakStart,
-                            breakEnd: breakEnd,
-                            notes: notes
-                        });
-                        
-                        rows.push([dateStr, dayOfWeek, start, end, breakStart, breakEnd, hours, notes]);
-                    }
-                }
-                
-                const minHours = document.getElementById('minHours').value;
-                const oldStorageKey = `timeTracking_${oldYear}_${String(oldMonth + 1).padStart(2, '0')}`;
-                localStorage.setItem(oldStorageKey, JSON.stringify(data));
-                localStorage.setItem(`${oldStorageKey}_minHours`, minHours);
-                
-                // Синхронізація з Firebase
-                if (firebaseSyncEnabled) {
-                    await saveToFirebase(oldMonth, oldYear, rows);
-                }
-            }
-            
-            // Тепер ініціалізуємо новий місяць (currentMonth буде оновлено в initTable)
-            await initTable();
+        function changeMonth() {
+            saveData();
+            initTable();
         }
 
         // Розрахунок годин для одного дня
@@ -580,8 +514,7 @@
             
             const startTime = row.querySelector('.start-time').value;
             const endTime = row.querySelector('.end-time').value;
-            const breakStart = row.querySelector('.break-start').value;
-            const breakEnd = row.querySelector('.break-end').value;
+            const breakTime = parseFloat(row.querySelector('.break-time').value) || 0;
 
             if (!startTime || !endTime) {
                 document.getElementById(`hours-${day}`).textContent = '0';
@@ -592,47 +525,12 @@
             const start = new Date(`2000-01-01T${startTime}`);
             const end = new Date(`2000-01-01T${endTime}`);
             
-            // Обчислення загального робочого часу
             let hours = (end - start) / (1000 * 60 * 60);
-            
-            // Перевірка на коректність: кінець має бути пізніше початку
-            if (hours < 0) {
-                // Якщо кінець раніше початку, припускаємо роботу через північ
-                hours += 24;
-            }
-            
-            // Обчислення часу перерви
-            let breakTime = 0;
-            if (breakStart && breakEnd) {
-                const [bsH, bsM] = breakStart.split(':').map(Number);
-                const [beH, beM] = breakEnd.split(':').map(Number);
-                breakTime = ((beH * 60 + beM) - (bsH * 60 + bsM)) / 60;
-                
-                // Перевірка коректності часу перерви
-                if (breakTime < 0) {
-                    console.warn(`День ${day}: кінець перерви раніше за початок`);
-                    breakTime = 0;
-                }
-                
-                // Перевірка, що перерва не перевищує робочий час
-                if (breakTime > hours) {
-                    console.warn(`День ${day}: перерва перевищує робочий час`);
-                    breakTime = 0;
-                }
-            }
-            
-            // Віднімаємо час перерви
             hours -= breakTime;
 
-            // Фінальна перевірка
             if (hours < 0) hours = 0;
 
-            // Конвертуємо години в формат HH:MM
-            const hoursInt = Math.floor(hours);
-            const minutes = Math.round((hours - hoursInt) * 60);
-            const timeFormat = `${hoursInt}:${String(minutes).padStart(2, '0')}`;
-            
-            document.getElementById(`hours-${day}`).textContent = timeFormat;
+            document.getElementById(`hours-${day}`).textContent = hours.toFixed(2);
             updateStats();
             saveData();
             autoSync(); // Автоматична синхронізація
@@ -652,44 +550,28 @@
         // Оновлення статистики
         function updateStats() {
             const daysInMonth = new Date(currentYear, currentMonth + 1, 0).getDate();
-            let totalMinutes = 0;
+            let totalHours = 0;
             let workDays = 0;
 
             for (let day = 1; day <= daysInMonth; day++) {
                 const hoursEl = document.getElementById(`hours-${day}`);
                 if (hoursEl) {
-                    const timeText = hoursEl.textContent;
-                    if (timeText && timeText !== '0' && timeText.includes(':')) {
-                        const [h, m] = timeText.split(':').map(Number);
-                        const minutes = h * 60 + m;
-                        if (minutes > 0) {
-                            totalMinutes += minutes;
-                            workDays++;
-                        }
+                    const hours = parseFloat(hoursEl.textContent) || 0;
+                    if (hours > 0) {
+                        totalHours += hours;
+                        workDays++;
                     }
                 }
             }
 
-            const totalHours = totalMinutes / 60;
             const minHours = parseFloat(document.getElementById('minHours').value) || 0;
             const remaining = minHours - totalHours;
 
-            // Відображаємо загальні години у форматі HH:MM
-            const totalH = Math.floor(totalHours);
-            const totalM = Math.round((totalHours - totalH) * 60);
-            document.getElementById('totalHours').textContent = `${totalH}:${String(totalM).padStart(2, '0')}`;
-            
+            document.getElementById('totalHours').textContent = totalHours.toFixed(1);
             document.getElementById('workDays').textContent = workDays;
+            document.getElementById('avgHours').textContent = workDays > 0 ? (totalHours / workDays).toFixed(1) : '0';
             document.getElementById('minHoursDisplay').textContent = minHours;
-            
-            // Відображаємо залишок у форматі HH:MM
-            if (remaining > 0) {
-                const remH = Math.floor(remaining);
-                const remM = Math.round((remaining - remH) * 60);
-                document.getElementById('remainingHours').textContent = `${remH}:${String(remM).padStart(2, '0')}`;
-            } else {
-                document.getElementById('remainingHours').textContent = '0:00';
-            }
+            document.getElementById('remainingHours').textContent = remaining > 0 ? remaining.toFixed(1) : '0';
 
             const remainingCard = document.getElementById('remainingCard');
             remainingCard.classList.remove('success', 'warning', 'danger');
@@ -723,20 +605,18 @@
                     
                     const start = row.querySelector('.start-time').value;
                     const end = row.querySelector('.end-time').value;
-                    const breakStart = row.querySelector('.break-start').value;
-                    const breakEnd = row.querySelector('.break-end').value;
+                    const breakTime = row.querySelector('.break-time').value;
                     const hours = document.getElementById(`hours-${day}`).textContent;
                     const notes = row.querySelector('.notes').value;
                     
                     data.push({
                         start: start,
                         end: end,
-                        breakStart: breakStart,
-                        breakEnd: breakEnd,
+                        break: breakTime,
                         notes: notes
                     });
                     
-                    rows.push([dateStr, dayOfWeek, start, end, breakStart, breakEnd, hours, notes]);
+                    rows.push([dateStr, dayOfWeek, start, end, breakTime, hours, notes]);
                 }
             }
             
@@ -747,9 +627,9 @@
             localStorage.setItem(storageKey, JSON.stringify(data));
             localStorage.setItem(`${storageKey}_minHours`, minHours);
             
-            // Синхронізація з Firebase
-            if (firebaseSyncEnabled) {
-                await saveToFirebase(month, year, rows);
+            // Збереження в Google Sheets
+            if (googleSyncEnabled) {
+                await saveToGoogle(month, year, rows);
             }
             
             const btn = event?.target;
@@ -760,26 +640,33 @@
             }
         }
 
-        // Збереження в Firebase
-        async function saveToFirebase(month, year, rows) {
+        // Збереження в Google Sheets
+        async function saveToGoogle(month, year, rows) {
             try {
-                if (!window.firebaseDB || !firebaseSyncEnabled) {
-                    console.log('Firebase недоступний, пропускаємо синхронізацію');
-                    return;
-                }
-                
-                console.log('Збереження в Firebase:', monthNames[month], year, rows.length, 'рядків');
-                const dataRef = window.firebaseRef(window.firebaseDB, `timeTracking/${year}/${month}`);
-                await window.firebaseSet(dataRef, {
-                    month: monthNames[month],
-                    year: year,
-                    rows: rows,
-                    updatedAt: Date.now()
+                console.log('Збереження в Google:', monthNames[month], year, rows.length, 'рядків');
+                const response = await fetch(GOOGLE_SCRIPT_URL, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        action: 'save',
+                        month: monthNames[month],
+                        year: year,
+                        rows: rows
+                    })
                 });
                 
-                console.log('✓ Дані синхронізовано з Firebase');
+                const result = await response.json();
+                console.log('Результат збереження:', result);
+                
+                if (result.success) {
+                    console.log('✓ Дані синхронізовано з Google Sheets');
+                } else {
+                    console.warn('⚠️ Помилка збереження:', result.message);
+                }
             } catch (error) {
-                console.warn('Помилка синхронізації з Firebase:', error);
+                console.warn('Помилка синхронізації з Google:', error);
             }
         }
 
@@ -789,28 +676,19 @@
             const year = parseInt(document.getElementById('yearSelect').value);
             const storageKey = `timeTracking_${year}_${String(month + 1).padStart(2, '0')}`;
             
-            // Завантажуємо minHours з localStorage (завжди)
-            const savedMinHours = localStorage.getItem(`${storageKey}_minHours`);
-            if (savedMinHours) {
-                document.getElementById('minHours').value = savedMinHours;
-            } else {
-                document.getElementById('minHours').value = 160;
-            }
-            
-            // Спробувати завантажити з Firebase
-            if (firebaseSyncEnabled) {
-                const firebaseData = await loadFromFirebase(month, year);
-                if (firebaseData && firebaseData.length > 0) {
-                    // Завантажуємо з Firebase
-                    firebaseData.forEach((item, index) => {
+            // Спробувати завантажити з Google Sheets
+            if (googleSyncEnabled) {
+                const googleData = await loadFromGoogle(month, year);
+                if (googleData && googleData.length > 0) {
+                    // Завантажуємо з Google
+                    googleData.forEach((item, index) => {
                         const day = index + 1;
                         const row = document.querySelector(`tr[data-day="${day}"]`);
-                        if (row && item.length >= 8) {
+                        if (row && item.length >= 7) {
                             row.querySelector('.start-time').value = item[2] || '';
                             row.querySelector('.end-time').value = item[3] || '';
-                            row.querySelector('.break-start').value = item[4] || '';
-                            row.querySelector('.break-end').value = item[5] || '';
-                            row.querySelector('.notes').value = item[7] || '';
+                            row.querySelector('.break-time').value = item[4] || '';
+                            row.querySelector('.notes').value = item[6] || '';
                         }
                     });
                     calculateAllHours();
@@ -818,8 +696,13 @@
                 }
             }
             
-            // Завантаження з localStorage якщо Firebase недоступний
+            // Завантаження з localStorage якщо Google недоступний
             const saved = localStorage.getItem(storageKey);
+            const savedMinHours = localStorage.getItem(`${storageKey}_minHours`);
+            
+            if (savedMinHours) {
+                document.getElementById('minHours').value = savedMinHours;
+            }
             
             if (!saved) return;
 
@@ -830,33 +713,27 @@
                 if (row) {
                     row.querySelector('.start-time').value = item.start || '';
                     row.querySelector('.end-time').value = item.end || '';
-                    row.querySelector('.break-start').value = item.breakStart || '';
-                    row.querySelector('.break-end').value = item.breakEnd || '';
+                    row.querySelector('.break-time').value = item.break || '';
                     row.querySelector('.notes').value = item.notes || '';
                 }
             });
             calculateAllHours();
         }
 
-        // Завантаження з Firebase
-        async function loadFromFirebase(month, year) {
+        // Завантаження з Google Sheets
+        async function loadFromGoogle(month, year) {
             try {
-                if (!window.firebaseDB || !firebaseSyncEnabled) {
-                    console.log('Firebase недоступний, завантажуємо локально');
-                    return null;
-                }
+                const url = GOOGLE_SCRIPT_URL + '?action=load&month=' + encodeURIComponent(monthNames[month]) + '&year=' + year;
+                console.log('Завантаження з Google:', url);
+                const response = await fetch(url);
+                const result = await response.json();
+                console.log('Отримано з Google:', result);
                 
-                console.log('Завантаження з Firebase:', monthNames[month], year);
-                const dataRef = window.firebaseRef(window.firebaseDB, `timeTracking/${year}/${month}`);
-                const snapshot = await window.firebaseGet(dataRef);
-                
-                if (snapshot.exists()) {
-                    const data = snapshot.val();
-                    console.log('Отримано з Firebase:', data);
-                    return data.rows || null;
+                if (result.success && result.data) {
+                    return result.data;
                 }
             } catch (error) {
-                console.warn('Не вдалося завантажити з Firebase:', error);
+                console.warn('Не вдалося завантажити з Google:', error);
             }
             return null;
         }
@@ -867,7 +744,7 @@
             const year = parseInt(document.getElementById('yearSelect').value);
             const daysInMonth = new Date(year, month + 1, 0).getDate();
             
-            let csv = 'Дата,День тижня,Початок,Кінець,Пауза початок,Пауза кінець,Всього годин,Примітки\n';
+            let csv = 'Дата,День тижня,Початок,Кінець,Перерва (год),Всього годин,Примітки\n';
             
             for (let day = 1; day <= daysInMonth; day++) {
                 const row = document.querySelector(`tr[data-day="${day}"]`);
@@ -878,19 +755,18 @@
                     const dayOfWeek = daysOfWeek[new Date(year, month, day).getDay()];
                     const start = row.querySelector('.start-time').value;
                     const end = row.querySelector('.end-time').value;
-                    const breakStart = row.querySelector('.break-start').value;
-                    const breakEnd = row.querySelector('.break-end').value;
+                    const breakTime = row.querySelector('.break-time').value;
                     const hours = document.getElementById(`hours-${day}`).textContent;
                     const notes = row.querySelector('.notes').value;
 
-                    csv += `${date},${dayOfWeek},${start},${end},${breakStart},${breakEnd},${hours},"${notes}"\n`;
+                    csv += `${date},${dayOfWeek},${start},${end},${breakTime},${hours},"${notes}"\n`;
                 }
             }
 
             const totalHours = document.getElementById('totalHours').textContent;
             const minHours = document.getElementById('minHours').value;
-            csv += `\n,,,,,,${totalHours},Всього годин за місяць\n`;
-            csv += `,,,,,,${minHours},Мінімум годин\n`;
+            csv += `\n,,,,,${totalHours},Всього годин за місяць\n`;
+            csv += `,,,,,${minHours},Мінімум годин\n`;
 
             const blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8;' });
             const link = document.createElement('a');
