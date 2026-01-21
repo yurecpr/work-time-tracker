@@ -180,7 +180,8 @@
 
         table {
             width: 100%;
-            border-collapse: collapse;
+            border-collapse: separate;
+            border-spacing: 0 8px;
             font-size: 15px;
         }
 
@@ -190,26 +191,42 @@
             padding: 15px 10px;
             text-align: left;
             font-weight: 600;
-            position: sticky;
-            top: 0;
-            z-index: 10;
+        }
+
+        tbody tr {
+            background: white;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.15);
         }
 
         td {
-            padding: 12px 10px;
+            padding: 14px 10px;
+            border-top: 1px solid #e9ecef;
             border-bottom: 1px solid #e9ecef;
+        }
+
+        td:first-child {
+            border-left: 1px solid #e9ecef;
+            border-radius: 8px 0 0 8px;
+        }
+
+        td:last-child {
+            border-right: 1px solid #e9ecef;
+            border-radius: 0 8px 8px 0;
         }
 
         tr:hover {
             background: #f8f9fa;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+            transform: translateY(-1px);
+            transition: all 0.2s;
         }
 
         .weekend {
-            background: #fee;
+            background: #fff5f5;
         }
 
         .weekend:hover {
-            background: #fdd;
+            background: #ffe5e5;
         }
 
         input[type="time"],
