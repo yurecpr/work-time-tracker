@@ -150,15 +150,25 @@
             try {
                 showStatus('Завантаження даних...', 'info');
                 const dbRef = window.firebaseRef(window.firebaseDB);
-                const snapshot = await window.firebaseGet(window.firebaseChild(dbRef, 'workTime'));
+                
+                // Перевіряємо обидва можливі шляхи
+                let snapshot = await window.firebaseGet(window.firebaseChild(dbRef, 'timeTracking'));
+                let foundPath = 'timeTracking';
+                
+                if (!snapshot.exists()) {
+                    snapshot = await window.firebaseGet(window.firebaseChild(dbRef, 'workTime'));
+                    foundPath = 'workTime';
+                }
                 
                 if (snapshot.exists()) {
                     const data = snapshot.val();
-                    document.getElementById('allMonthsData').textContent = JSON.stringify(data, null, 2);
-                    showStatus('✓ Дані завантажено успішно!', 'success');
+                    document.getElementById('allMonthsData').textContent = 
+                        `Знайдено за шляхом: ${foundPath}\n\n` + JSON.stringify(data, null, 2);
+                    showStatus(`✓ Дані завантажено з ${foundPath}!`, 'success');
                 } else {
-                    document.getElementById('allMonthsData').textContent = 'Немає даних у Firebase';
-                    showStatus('⚠ Дані не знайдено', 'error');
+                    document.getElementById('allMonthsData').textContent = 
+                        'Немає даних у Firebase\n\nПеревірені шляхи:\n- timeTracking\n- workTime';
+                    showStatus('⚠ Дані не знайдено у жодному шляху', 'error');
                 }
             } catch (error) {
                 console.error('Error loading data:', error);
@@ -171,22 +181,35 @@
             try {
                 showStatus('Завантаження даних лютого...', 'info');
                 const dbRef = window.firebaseRef(window.firebaseDB);
-                const snapshot = await window.firebaseGet(window.firebaseChild(dbRef, 'workTime/2026/02'));
                 
-                if (snapshot.exists()) {
-                    const data = snapshot.val();
-                    document.getElementById('february2026Data').textContent = JSON.stringify(data, null, 2);
-                    showStatus('✓ Дані лютого 2026 знайдено!', 'success');
+                // Спробуємо різні шляхи
+                const paths = [
+                    'timeTracking/2026/1',  // Новий формат (місяць 0-based)
+                    'workTime/2026/02',     // Інший можливий формат
+                    'timeTracking/2026/02'  // Ще один варіант
+                ];
+                
+                for (const path of paths) {
+                    const snapshot = await window.firebaseGet(window.firebaseChild(dbRef, path));
                     
-                    // Показуємо статистику
-                    if (data.rows) {
-                        const workDays = data.rows.filter(row => row.startTime).length;
-                        showStatus(`✓ Знайдено ${data.rows.length} днів, ${workDays} робочих днів`, 'success');
+                    if (snapshot.exists()) {
+                        const data = snapshot.val();
+                        document.getElementById('february2026Data').textContent = 
+                            `Знайдено за шляхом: ${path}\n\n` + JSON.stringify(data, null, 2);
+                        showStatus(`✓ Дані лютого 2026 знайдено за шляхом: ${path}`, 'success');
+                        
+                        // Показуємо статистику
+                        if (data.rows) {
+                            const workDays = data.rows.filter(row => row[2]).length; // row[2] = start time
+                            showStatus(`✓ Знайдено ${data.rows.length} днів, ${workDays} робочих днів за ${path}`, 'success');
+                        }
+                        return;
                     }
-                } else {
-                    document.getElementById('february2026Data').textContent = 'Немає даних за Лютий 2026';
-                    showStatus('⚠ Дані лютого не знайдено у Firebase', 'error');
                 }
+                
+                document.getElementById('february2026Data').textContent = 
+                    'Немає даних за Лютий 2026\n\nПеревірені шляхи:\n' + paths.join('\n');
+                showStatus('⚠ Дані лютого не знайдено у жодному шляху Firebase', 'error');
             } catch (error) {
                 console.error('Error loading February data:', error);
                 document.getElementById('february2026Data').textContent = 'Помилка: ' + error.message;
@@ -220,35 +243,56 @@
             try {
                 showStatus('Відновлення даних...', 'info');
                 const dbRef = window.firebaseRef(window.firebaseDB);
-                const snapshot = await window.firebaseGet(window.firebaseChild(dbRef, 'workTime/2026/02'));
                 
-                if (snapshot.exists()) {
-                    const data = snapshot.val();
+                // Пробуємо різні шляхи
+                const paths = [
+                    'timeTracking/2026/1',  // Правильний шлях (місяць 0-based: Feb = 1)
+                    'workTime/2026/02',
+                    'timeTracking/2026/02'
+                ];
+                
+                for (const path of paths) {
+                    const snapshot = await window.firebaseGet(window.firebaseChild(dbRef, path));
                     
-                    // Зберігаємо в localStorage у правильному форматі
-                    const storageKey = 'timeTracking_2026_02';
-                    
-                    // data.rows містить масив даних по днях
-                    if (data.rows) {
-                        localStorage.setItem(storageKey, JSON.stringify(data.rows));
+                    if (snapshot.exists()) {
+                        const data = snapshot.val();
                         
-                        // Зберігаємо також minHours якщо є
-                        if (data.minHours) {
-                            localStorage.setItem(`${storageKey}_minHours`, data.minHours);
+                        // Зберігаємо в localStorage у правильному форматі
+                        const storageKey = 'timeTracking_2026_02';
+                        
+                        // data.rows містить масив даних по днях
+                        if (data.rows) {
+                            // Конвертуємо rows у формат для localStorage
+                            const localData = data.rows.map(row => ({
+                                start: row[2] || '',
+                                end: row[3] || '',
+                                breakStart: row[4] || '',
+                                breakEnd: row[5] || '',
+                                notes: row[7] || ''
+                            }));
+                            
+                            localStorage.setItem(storageKey, JSON.stringify(localData));
+                            
+                            // Зберігаємо також minHours якщо є
+                            if (data.minHours) {
+                                localStorage.setItem(`${storageKey}_minHours`, data.minHours);
+                            }
+                            
+                            showStatus(`✓ Дані лютого 2026 успішно відновлено з ${path}!`, 'success');
+                            
+                            // Пропонуємо відкрити головну сторінку
+                            if (confirm('Дані відновлено! Відкрити головну сторінку?')) {
+                                window.location.href = 'index.html';
+                            }
+                            return;
+                        } else {
+                            showStatus('⚠ Дані у неправильному форматі', 'error');
+                            return;
                         }
-                        
-                        showStatus('✓ Дані лютого 2026 успішно відновлено!', 'success');
-                        
-                        // Пропонуємо відкрити головну сторінку
-                        if (confirm('Дані відновлено! Відкрити головну сторінку?')) {
-                            window.location.href = 'index.html';
-                        }
-                    } else {
-                        showStatus('⚠ Дані у неправильному форматі', 'error');
                     }
-                } else {
-                    showStatus('❌ Немає даних за Лютий 2026 у Firebase', 'error');
                 }
+                
+                showStatus('❌ Немає даних за Лютий 2026 у Firebase (перевірено всі шляхи)', 'error');
             } catch (error) {
                 console.error('Error restoring data:', error);
                 showStatus('❌ Помилка відновлення: ' + error.message, 'error');

@@ -1,0 +1,344 @@
+<!DOCTYPE html>
+<html lang="uk">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Міграція даних в Firebase</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            padding: 20px;
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .container {
+            max-width: 800px;
+            background: white;
+            border-radius: 15px;
+            padding: 40px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+        }
+        h1 {
+            color: #667eea;
+            margin-bottom: 20px;
+            text-align: center;
+        }
+        .info-box {
+            background: #dbeafe;
+            padding: 20px;
+            border-radius: 10px;
+            margin: 20px 0;
+            border-left: 4px solid #3b82f6;
+        }
+        .success-box {
+            background: #d1fae5;
+            padding: 20px;
+            border-radius: 10px;
+            margin: 20px 0;
+            border-left: 4px solid #10b981;
+        }
+        .warning-box {
+            background: #fef3c7;
+            padding: 20px;
+            border-radius: 10px;
+            margin: 20px 0;
+            border-left: 4px solid #f59e0b;
+        }
+        .btn {
+            padding: 15px 30px;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 18px;
+            font-weight: 600;
+            margin: 10px 5px;
+            transition: all 0.3s;
+        }
+        .btn-primary {
+            background: #667eea;
+            color: white;
+        }
+        .btn-primary:hover {
+            background: #5568d3;
+            transform: translateY(-2px);
+        }
+        .btn-success {
+            background: #10b981;
+            color: white;
+        }
+        .btn-success:hover {
+            background: #059669;
+            transform: translateY(-2px);
+        }
+        .data-list {
+            background: #f8f9fa;
+            padding: 15px;
+            border-radius: 8px;
+            max-height: 400px;
+            overflow-y: auto;
+            margin: 20px 0;
+        }
+        .data-item {
+            padding: 10px;
+            margin: 5px 0;
+            background: white;
+            border-radius: 5px;
+            border-left: 3px solid #667eea;
+        }
+        .progress {
+            margin: 20px 0;
+        }
+        .progress-bar {
+            background: #e9ecef;
+            height: 30px;
+            border-radius: 15px;
+            overflow: hidden;
+        }
+        .progress-fill {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            height: 100%;
+            transition: width 0.3s;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-weight: bold;
+        }
+        .actions {
+            text-align: center;
+            margin-top: 30px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🔄 Міграція даних в Firebase</h1>
+        
+        <div class="info-box">
+            <strong>ℹ️ Про міграцію</strong><br>
+            Цей інструмент перенесе всі дані з LocalStorage вашого браузера в Firebase.<br>
+            Після міграції дані будуть доступні на всіх пристроях.
+        </div>
+        
+        <div id="statusBox"></div>
+        
+        <div id="dataList" style="display: none;">
+            <h3>📊 Знайдені дані в LocalStorage:</h3>
+            <div class="data-list" id="foundData"></div>
+        </div>
+        
+        <div id="progress" style="display: none;" class="progress">
+            <div class="progress-bar">
+                <div class="progress-fill" id="progressFill" style="width: 0%">0%</div>
+            </div>
+            <div id="progressText" style="text-align: center; margin-top: 10px;"></div>
+        </div>
+        
+        <div class="actions">
+            <button class="btn btn-primary" id="scanBtn" onclick="scanLocalStorage()">🔍 Сканувати LocalStorage</button>
+            <button class="btn btn-success" id="migrateBtn" onclick="migrateToFirebase()" style="display: none;">🚀 Мігрувати в Firebase</button>
+        </div>
+    </div>
+
+    <!-- Firebase SDK -->
+    <script type="module">
+        import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js';
+        import { getDatabase, ref, set } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js';
+        
+        const firebaseConfig = {
+            apiKey: "AIzaSyBjusHy-xqg8FA8LjsGHK8DJFm4eJppDHM",
+            authDomain: "work-time-a7236.firebaseapp.com",
+            databaseURL: "https://work-time-a7236-default-rtdb.europe-west1.firebasedatabase.app",
+            projectId: "work-time-a7236",
+            storageBucket: "work-time-a7236.firebasestorage.app",
+            messagingSenderId: "68175538100",
+            appId: "1:68175538100:web:bdb96fe020af7c3e59f4e1"
+        };
+        
+        const app = initializeApp(firebaseConfig);
+        const database = getDatabase(app);
+        
+        window.firebaseDB = database;
+        window.firebaseRef = ref;
+        window.firebaseSet = set;
+    </script>
+    
+    <script>
+        let foundMonths = [];
+        const monthNames = ['Січень', 'Лютий', 'Березень', 'Квітень', 'Травень', 'Червень', 'Липень', 'Серпень', 'Вересень', 'Жовтень', 'Листопад', 'Грудень'];
+
+        function showStatus(message, type = 'info') {
+            const statusBox = document.getElementById('statusBox');
+            statusBox.className = type + '-box';
+            statusBox.innerHTML = message;
+            statusBox.style.display = 'block';
+        }
+
+        function scanLocalStorage() {
+            foundMonths = [];
+            const foundData = document.getElementById('foundData');
+            foundData.innerHTML = '';
+            
+            showStatus('🔍 Сканування LocalStorage...', 'info');
+            
+            for (let i = 0; i < localStorage.length; i++) {
+                const key = localStorage.key(i);
+                
+                if (key.startsWith('timeTracking_')) {
+                    try {
+                        const data = JSON.parse(localStorage.getItem(key));
+                        const minHoursKey = `${key}_minHours`;
+                        const minHours = localStorage.getItem(minHoursKey);
+                        
+                        // Парсимо ключ: timeTracking_2026_01
+                        const parts = key.split('_');
+                        const year = parseInt(parts[1]);
+                        const month = parseInt(parts[2]) - 1; // 0-based
+                        
+                        // Підраховуємо робочі дні
+                        const workDays = data.filter(d => d.start || d.end).length;
+                        
+                        if (workDays > 0 || data.length > 0) {
+                            foundMonths.push({
+                                key: key,
+                                year: year,
+                                month: month,
+                                monthName: monthNames[month],
+                                data: data,
+                                minHours: minHours,
+                                workDays: workDays
+                            });
+                            
+                            const item = document.createElement('div');
+                            item.className = 'data-item';
+                            item.innerHTML = `
+                                <strong>${monthNames[month]} ${year}</strong><br>
+                                📊 ${workDays} робочих днів (всього ${data.length} днів)<br>
+                                ⏱️ Мінімум годин: ${minHours || 160}
+                            `;
+                            foundData.appendChild(item);
+                        }
+                    } catch (e) {
+                        console.error('Помилка читання', key, e);
+                    }
+                }
+            }
+            
+            if (foundMonths.length > 0) {
+                showStatus(`✅ Знайдено ${foundMonths.length} місяців з даними`, 'success');
+                document.getElementById('dataList').style.display = 'block';
+                document.getElementById('migrateBtn').style.display = 'inline-block';
+            } else {
+                showStatus('⚠️ Не знайдено даних для міграції', 'warning');
+            }
+        }
+
+        async function migrateToFirebase() {
+            if (foundMonths.length === 0) {
+                showStatus('❌ Немає даних для міграції', 'warning');
+                return;
+            }
+            
+            if (!confirm(`Мігрувати ${foundMonths.length} місяців в Firebase?\n\nЦе перезапише існуючі дані у Firebase.`)) {
+                return;
+            }
+            
+            document.getElementById('scanBtn').disabled = true;
+            document.getElementById('migrateBtn').disabled = true;
+            document.getElementById('progress').style.display = 'block';
+            
+            showStatus('🚀 Міграція в Firebase...', 'info');
+            
+            const daysOfWeek = ['Неділя', 'Понеділок', 'Вівторок', 'Середа', 'Четвер', 'П\'ятниця', 'Субота'];
+            
+            for (let i = 0; i < foundMonths.length; i++) {
+                const monthData = foundMonths[i];
+                const progress = ((i + 1) / foundMonths.length) * 100;
+                
+                document.getElementById('progressFill').style.width = progress + '%';
+                document.getElementById('progressFill').textContent = Math.round(progress) + '%';
+                document.getElementById('progressText').textContent = `Міграція: ${monthData.monthName} ${monthData.year}...`;
+                
+                try {
+                    // Конвертуємо дані в формат Firebase
+                    const rows = [];
+                    
+                    monthData.data.forEach((item, index) => {
+                        const day = index + 1;
+                        const date = new Date(monthData.year, monthData.month, day);
+                        const dayOfWeek = daysOfWeek[date.getDay()];
+                        const monthStr = String(monthData.month + 1).padStart(2, '0');
+                        const dayStr = String(day).padStart(2, '0');
+                        const dateStr = `${dayStr}.${monthStr}.${monthData.year}`;
+                        
+                        // Обчислюємо години
+                        let hours = '0:00';
+                        if (item.start && item.end) {
+                            const start = new Date(`2000-01-01T${item.start}`);
+                            const end = new Date(`2000-01-01T${item.end}`);
+                            let totalHours = (end - start) / (1000 * 60 * 60);
+                            
+                            if (item.breakStart && item.breakEnd) {
+                                const breakStart = new Date(`2000-01-01T${item.breakStart}`);
+                                const breakEnd = new Date(`2000-01-01T${item.breakEnd}`);
+                                const breakHours = (breakEnd - breakStart) / (1000 * 60 * 60);
+                                totalHours -= breakHours;
+                            }
+                            
+                            const h = Math.floor(totalHours);
+                            const m = Math.round((totalHours - h) * 60);
+                            hours = `${h}:${String(m).padStart(2, '0')}`;
+                        }
+                        
+                        rows.push([
+                            dateStr,
+                            dayOfWeek,
+                            item.start || '',
+                            item.end || '',
+                            item.breakStart || '',
+                            item.breakEnd || '',
+                            hours,
+                            item.notes || ''
+                        ]);
+                    });
+                    
+                    // Зберігаємо в Firebase (правильний шлях як у index.html)
+                    const firebaseRef = window.firebaseRef(window.firebaseDB, `timeTracking/${monthData.year}/${monthData.month}`);
+                    
+                    await window.firebaseSet(firebaseRef, {
+                        month: monthData.monthName,
+                        year: monthData.year,
+                        rows: rows,
+                        minHours: monthData.minHours || 160,
+                        migratedAt: new Date().toISOString(),
+                        updatedAt: Date.now()
+                    });
+                    
+                    console.log(`✓ Мігровано: ${monthData.monthName} ${monthData.year}`);
+                    
+                } catch (error) {
+                    console.error('Помилка міграції', monthData.monthName, error);
+                    showStatus(`❌ Помилка міграції ${monthData.monthName}: ${error.message}`, 'warning');
+                }
+                
+                // Невелика затримка між запитами
+                await new Promise(resolve => setTimeout(resolve, 200));
+            }
+            
+            showStatus(`🎉 Міграція завершена!<br><br>Мігровано ${foundMonths.length} місяців в Firebase.<br>Тепер ви можете відкрити index.html і побачити свої дані!`, 'success');
+            
+            document.getElementById('progressFill').style.width = '100%';
+            document.getElementById('progressFill').textContent = '100%';
+            document.getElementById('progressText').innerHTML = `<strong>✅ Готово!</strong> <button onclick="window.location.href='index.html'" style="margin-left: 10px; padding: 8px 16px; background: #10b981; color: white; border: none; border-radius: 5px; cursor: pointer;">Відкрити додаток</button>`;
+        }
+        
+        // Автосканування при завантаженні
+        window.addEventListener('load', () => {
+            setTimeout(scanLocalStorage, 500);
+        });
+    </script>
+</body>
+</html>

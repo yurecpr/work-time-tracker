@@ -1,0 +1,84 @@
+<!DOCTYPE html>
+<html lang="uk">
+<head>
+    <meta charset="UTF-8">
+    <title>Пошук справжнього лютого</title>
+    <style>
+        body { font-family: 'Segoe UI', sans-serif; padding: 20px; }
+        .backup { margin: 10px 0; padding: 15px; background: #f0f0f0; border-radius: 5px; }
+        .found { background: #d1fae5; border: 2px solid #10b981; }
+    </style>
+</head>
+<body>
+    <h1>🔍 Пошук справжніх даних лютого</h1>
+    <button onclick="search()">Шукати</button>
+    <div id="result"></div>
+    
+    <script type="module">
+        import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js';
+        import { getDatabase, ref, get, child } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js';
+        
+        const app = initializeApp(firebaseConfig = {
+            apiKey: "AIzaSyBjusHy-xqg8FA8LjsGHK8DJFm4eJppDHM",
+            authDomain: "work-time-a7236.firebaseapp.com",
+            databaseURL: "https://work-time-a7236-default-rtdb.europe-west1.firebasedatabase.app",
+            projectId: "work-time-a7236",
+            storageBucket: "work-time-a7236.firebasestorage.app",
+            messagingSenderId: "68175538100",
+            appId: "1:68175538100:web:bdb96fe020af7c3e59f4e1"
+        });
+        
+        const database = getDatabase(app);
+        window.firebaseDB = database;
+        window.firebaseRef = ref;
+        window.firebaseGet = get;
+        window.firebaseChild = child;
+    </script>
+    
+    <script>
+        async function search() {
+            const result = document.getElementById('result');
+            result.innerHTML = '<p>Шукаємо...</p>';
+            
+            const dbRef = window.firebaseRef(window.firebaseDB);
+            
+            // Перевіряємо backups
+            const backups = await window.firebaseGet(window.firebaseChild(dbRef, 'backups'));
+            
+            let html = '<h2>Результати:</h2>';
+            
+            if (backups.exists()) {
+                const data = backups.val();
+                html += '<h3>✓ Знайдено backups!</h3>';
+                html += '<pre>' + JSON.stringify(data, null, 2) + '</pre>';
+            } else {
+                html += '<p>❌ Backups не знайдено</p>';
+            }
+            
+            // Перевіряємо всі можливі місця
+            const paths = [
+                'workTime/2026/02',
+                'timeTracking/2026/02', 
+                'timeTracking_backup/2026/1',
+                'history/2026/02'
+            ];
+            
+            html += '<h3>Перевірка альтернативних шляхів:</h3>';
+            
+            for (const path of paths) {
+                const snap = await window.firebaseGet(window.firebaseChild(dbRef, path));
+                if (snap.exists()) {
+                    html += `<div class="backup found"><strong>✓ Знайдено: ${path}</strong><pre>` + 
+                            JSON.stringify(snap.val(), null, 2) + '</pre></div>';
+                } else {
+                    html += `<div class="backup">❌ ${path} - порожньо</div>`;
+                }
+            }
+            
+            result.innerHTML = html;
+        }
+        
+        setTimeout(search, 500);
+    </script>
+</body>
+</html>

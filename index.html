@@ -392,6 +392,7 @@
         <div class="controls">
             <button class="btn btn-success" id="googleBtn" onclick="connectGoogle()">🔗 Підключити Google Sheets</button>
             <button class="btn btn-success" id="syncBtn" onclick="syncToGoogle()" style="display:none">☁️ Синхронізувати з Google</button>
+            <button class="btn btn-info" onclick="viewHistory()">📜 Історія змін</button>
             <button class="btn btn-info" onclick="window.print()">🖨️ Друк</button>
         </div>
 
@@ -441,7 +442,7 @@
     <!-- Firebase SDK -->
     <script type="module">
         import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js';
-        import { getDatabase, ref, set, get, onValue } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js';
+        import { getDatabase, ref, set, get, onValue, remove } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js';
         
         // Firebase configuration
         const firebaseConfig = {
@@ -464,6 +465,7 @@
         window.firebaseSet = set;
         window.firebaseGet = get;
         window.firebaseOnValue = onValue;
+        window.firebaseRemove = remove;
     </script>
     
     <script>
@@ -808,18 +810,55 @@
                     return;
                 }
                 
-                console.log('Збереження в Firebase:', monthNames[month], year, rows.length, 'рядків');
-                const dataRef = window.firebaseRef(window.firebaseDB, `timeTracking/${year}/${month}`);
-                await window.firebaseSet(dataRef, {
+                const timestamp = Date.now();
+                const data = {
                     month: monthNames[month],
                     year: year,
                     rows: rows,
-                    updatedAt: Date.now()
-                });
+                    updatedAt: timestamp
+                };
                 
-                console.log('✓ Дані синхронізовано з Firebase');
+                console.log('Збереження в Firebase:', monthNames[month], year, rows.length, 'рядків');
+                
+                // 1. Зберігаємо поточні дані
+                const dataRef = window.firebaseRef(window.firebaseDB, `timeTracking/${year}/${month}`);
+                await window.firebaseSet(dataRef, data);
+                
+                // 2. Зберігаємо в історію (backup)
+                const historyRef = window.firebaseRef(window.firebaseDB, `history/${year}/${month}/${timestamp}`);
+                await window.firebaseSet(historyRef, data);
+                
+                console.log('✓ Дані синхронізовано з Firebase (+ backup)');
+                
+                // 3. Очищуємо старі бекапи (зберігаємо останні 90 днів)
+                await cleanOldBackups(year, month);
             } catch (error) {
                 console.warn('Помилка синхронізації з Firebase:', error);
+            }
+        }
+
+        // Очищення старих бекапів (зберігаємо останні 90 днів)
+        async function cleanOldBackups(year, month) {
+            try {
+                const historyRef = window.firebaseRef(window.firebaseDB, `history/${year}/${month}`);
+                const snapshot = await window.firebaseGet(historyRef);
+                
+                if (!snapshot.exists()) return;
+                
+                const backups = snapshot.val();
+                const timestamps = Object.keys(backups).map(Number).sort((a, b) => b - a);
+                const ninetyDaysAgo = Date.now() - (90 * 24 * 60 * 60 * 1000);
+                
+                // Видаляємо бекапи старіші за 90 днів
+                for (const ts of timestamps) {
+                    if (ts < ninetyDaysAgo) {
+                        const oldBackupRef = window.firebaseRef(window.firebaseDB, `history/${year}/${month}/${ts}`);
+                        await window.firebaseRemove(oldBackupRef);
+                        console.log(`🗑️ Видалено старий бекап: ${new Date(ts).toLocaleString()}`);
+                    }
+                }
+            } catch (error) {
+                console.warn('Помилка очищення старих бекапів:', error);
             }
         }
 
@@ -1068,6 +1107,136 @@ function onOpen() {
                 document.querySelectorAll('[style*="z-index: 10000"]').forEach(el => el.remove());
             };
             return overlay;
+        }
+
+        // Перегляд історії змін (бекапів)
+        async function viewHistory() {
+            const month = parseInt(document.getElementById('monthSelect').value);
+            const year = parseInt(document.getElementById('yearSelect').value);
+            
+            try {
+                if (!window.firebaseDB) {
+                    alert('Firebase недоступний');
+                    return;
+                }
+                
+                // Завантажуємо всі бекапи для поточного місяця
+                const historyRef = window.firebaseRef(window.firebaseDB, `history/${year}/${month}`);
+                const snapshot = await window.firebaseGet(historyRef);
+                
+                if (!snapshot.exists()) {
+                    alert('Історія змін порожня для цього місяця');
+                    return;
+                }
+                
+                const backups = snapshot.val();
+                const timestamps = Object.keys(backups).map(Number).sort((a, b) => b - a);
+                
+                // Створюємо модальне вікно
+                const overlay = createOverlay();
+                document.body.appendChild(overlay);
+                
+                const modal = document.createElement('div');
+                modal.style.cssText = `
+                    position: fixed;
+                    top: 50%;
+                    left: 50%;
+                    transform: translate(-50%, -50%);
+                    background: white;
+                    padding: 30px;
+                    border-radius: 15px;
+                    box-shadow: 0 10px 40px rgba(0,0,0,0.3);
+                    z-index: 10000;
+                    max-width: 800px;
+                    max-height: 80vh;
+                    overflow-y: auto;
+                    width: 90%;
+                `;
+                
+                let html = `
+                    <h2 style="margin-bottom: 20px; color: #667eea;">📜 Історія змін - ${monthNames[month]} ${year}</h2>
+                    <p style="margin-bottom: 20px; color: #6c757d;">Знайдено ${timestamps.length} резервних копій</p>
+                    <div style="display: flex; flex-direction: column; gap: 15px;">
+                `;
+                
+                timestamps.forEach((ts, index) => {
+                    const backup = backups[ts];
+                    const date = new Date(ts);
+                    const isRecent = index === 0;
+                    
+                    html += `
+                        <div style="padding: 15px; border: 2px solid ${isRecent ? '#10b981' : '#e9ecef'}; border-radius: 8px; background: ${isRecent ? '#f0fdf4' : 'white'};">
+                            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+                                <div>
+                                    <strong style="font-size: 16px;">${date.toLocaleString('uk-UA')}</strong>
+                                    ${isRecent ? '<span style="color: #10b981; font-weight: 600; margin-left: 10px;">✓ Остання версія</span>' : ''}
+                                </div>
+                                <button onclick="restoreBackup(${year}, ${month}, ${ts})" 
+                                    style="padding: 8px 16px; background: #667eea; color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: 600;">
+                                    ↺ Відновити
+                                </button>
+                            </div>
+                            <div style="color: #6c757d; font-size: 14px;">
+                                Рядків даних: ${backup.rows ? backup.rows.length : 0}
+                            </div>
+                        </div>
+                    `;
+                });
+                
+                html += `
+                    </div>
+                    <div style="text-align: center; margin-top: 20px;">
+                        <button onclick="this.closest('[style*=\\'z-index: 10000\\']').remove(); document.querySelector('[style*=\\'z-index: 9999\\']').remove();" 
+                            style="padding: 12px 24px; background: #6c757d; color: white; border: none; border-radius: 8px; cursor: pointer; font-size: 16px; font-weight: 600;">
+                            Закрити
+                        </button>
+                    </div>
+                `;
+                
+                modal.innerHTML = html;
+                document.body.appendChild(modal);
+            } catch (error) {
+                console.error('Помилка завантаження історії:', error);
+                alert('Помилка завантаження історії: ' + error.message);
+            }
+        }
+
+        // Відновлення з бекапу
+        async function restoreBackup(year, month, timestamp) {
+            if (!confirm('Ви впевнені, що хочете відновити дані з цього бекапу? Поточні дані будуть збережені в історію.')) {
+                return;
+            }
+            
+            try {
+                // Завантажуємо дані з бекапу
+                const backupRef = window.firebaseRef(window.firebaseDB, `history/${year}/${month}/${timestamp}`);
+                const snapshot = await window.firebaseGet(backupRef);
+                
+                if (!snapshot.exists()) {
+                    alert('Бекап не знайдено');
+                    return;
+                }
+                
+                const backupData = snapshot.val();
+                
+                // Зберігаємо поточні дані в історію (створюємо новий бекап)
+                const currentRef = window.firebaseRef(window.firebaseDB, `timeTracking/${year}/${month}`);
+                const currentSnapshot = await window.firebaseGet(currentRef);
+                if (currentSnapshot.exists()) {
+                    const currentData = currentSnapshot.val();
+                    const newBackupRef = window.firebaseRef(window.firebaseDB, `history/${year}/${month}/${Date.now()}`);
+                    await window.firebaseSet(newBackupRef, currentData);
+                }
+                
+                // Відновлюємо з бекапу
+                await window.firebaseSet(currentRef, backupData);
+                
+                alert('✓ Дані успішно відновлено! Сторінка буде перезавантажена.');
+                location.reload();
+            } catch (error) {
+                console.error('Помилка відновлення:', error);
+                alert('Помилка відновлення: ' + error.message);
+            }
         }
 
         // Показати детальну інструкцію

@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html lang="uk">
+<head>
+    <meta charset="UTF-8">
+    <title>Порівняння місяців</title>
+    <style>
+        body { font-family: monospace; padding: 20px; }
+        .month { display: inline-block; vertical-align: top; margin: 20px; }
+        .diff { background: yellow; }
+    </style>
+</head>
+<body>
+    <h1>Порівняння Січень vs Лютий</h1>
+    <button onclick="compare()">Порівняти</button>
+    <div id="result"></div>
+    
+    <script type="module">
+        import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js';
+        import { getDatabase, ref, get, child } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js';
+        
+        const firebaseConfig = {
+            apiKey: "AIzaSyBjusHy-xqg8FA8LjsGHK8DJFm4eJppDHM",
+            authDomain: "work-time-a7236.firebaseapp.com",
+            databaseURL: "https://work-time-a7236-default-rtdb.europe-west1.firebasedatabase.app",
+            projectId: "work-time-a7236",
+            storageBucket: "work-time-a7236.firebasestorage.app",
+            messagingSenderId: "68175538100",
+            appId: "1:68175538100:web:bdb96fe020af7c3e59f4e1"
+        };
+        
+        const app = initializeApp(firebaseConfig);
+        const database = getDatabase(app);
+        
+        window.firebaseDB = database;
+        window.firebaseRef = ref;
+        window.firebaseGet = get;
+        window.firebaseChild = child;
+    </script>
+    
+    <script>
+        async function compare() {
+            const dbRef = window.firebaseRef(window.firebaseDB);
+            
+            const jan = await window.firebaseGet(window.firebaseChild(dbRef, 'timeTracking/2026/0'));
+            const feb = await window.firebaseGet(window.firebaseChild(dbRef, 'timeTracking/2026/1'));
+            
+            let html = '<div class="month"><h2>Січень (0)</h2><pre>';
+            
+            if (jan.exists()) {
+                const janData = jan.val();
+                janData.rows.forEach((row, i) => {
+                    if (row[2] || row[3]) { // Якщо є час
+                        html += `День ${i+1}: ${row[2]}-${row[3]} (${row[6]})\n`;
+                    }
+                });
+            } else {
+                html += 'Немає даних';
+            }
+            
+            html += '</pre></div><div class="month"><h2>Лютий (1)</h2><pre>';
+            
+            if (feb.exists()) {
+                const febData = feb.val();
+                febData.rows.forEach((row, i) => {
+                    if (row[2] || row[3]) {
+                        html += `День ${i+1}: ${row[2]}-${row[3]} (${row[6]})\n`;
+                    }
+                });
+            }
+            
+            html += '</pre></div>';
+            
+            // Порівняння
+            if (jan.exists() && feb.exists()) {
+                const janData = jan.val();
+                const febData = feb.val();
+                
+                html += '<h2>Аналіз:</h2><pre>';
+                
+                let identical = 0;
+                for (let i = 0; i < 31; i++) {
+                    const jr = janData.rows[i];
+                    const fr = febData.rows[i];
+                    
+                    if (jr && fr && jr[2] === fr[2] && jr[3] === fr[3] && jr[4] === fr[4] && jr[5] === fr[5]) {
+                        if (jr[2]) { // Тільки якщо є дані
+                            identical++;
+                            html += `День ${i+1}: ОДНАКОВІ (${jr[2]}-${jr[3]})\n`;
+                        }
+                    }
+                }
+                
+                html += `\n<strong>Однакових робочих днів: ${identical}</strong>\n`;
+                html += identical > 5 ? '<span style="color: red;">⚠️ ЦЕ КОПІЯ!</span>' : '<span style="color: green;">✓ Різні дані</span>';
+                html += '</pre>';
+            }
+            
+            document.getElementById('result').innerHTML = html;
+        }
+        
+        setTimeout(compare, 1000);
+    </script>
+</body>
+</html>
