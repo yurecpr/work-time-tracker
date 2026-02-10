@@ -1,0 +1,297 @@
+<!DOCTYPE html>
+<html lang="uk">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Firebase Data Viewer</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            padding: 20px;
+            min-height: 100vh;
+        }
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 15px;
+            padding: 30px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+        }
+        h1 {
+            color: #667eea;
+            margin-bottom: 20px;
+        }
+        .data-section {
+            margin-bottom: 30px;
+            padding: 20px;
+            background: #f8f9fa;
+            border-radius: 10px;
+        }
+        .data-section h2 {
+            color: #495057;
+            margin-bottom: 15px;
+        }
+        pre {
+            background: #fff;
+            padding: 15px;
+            border-radius: 8px;
+            overflow-x: auto;
+            border: 2px solid #e9ecef;
+        }
+        .btn {
+            padding: 12px 24px;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 16px;
+            font-weight: 600;
+            background: #667eea;
+            color: white;
+            margin: 5px;
+        }
+        .btn:hover {
+            background: #5568d3;
+        }
+        .btn-success {
+            background: #10b981;
+        }
+        .btn-success:hover {
+            background: #059669;
+        }
+        .btn-danger {
+            background: #ef4444;
+        }
+        .btn-danger:hover {
+            background: #dc2626;
+        }
+        .status {
+            padding: 10px;
+            border-radius: 5px;
+            margin: 10px 0;
+        }
+        .success {
+            background: #d1fae5;
+            color: #065f46;
+        }
+        .error {
+            background: #fee2e2;
+            color: #991b1b;
+        }
+        .info {
+            background: #dbeafe;
+            color: #1e40af;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🔍 Перегляд даних Firebase</h1>
+        
+        <div class="data-section">
+            <h2>📊 Всі збережені місяці</h2>
+            <button class="btn" onclick="loadAllMonths()">Завантажити дані</button>
+            <pre id="allMonthsData">Натисніть кнопку для завантаження...</pre>
+        </div>
+
+        <div class="data-section">
+            <h2>📅 Лютий 2026</h2>
+            <button class="btn btn-success" onclick="loadFebruary2026()">Завантажити Лютий 2026</button>
+            <pre id="february2026Data">Натисніть кнопку для завантаження...</pre>
+        </div>
+
+        <div class="data-section">
+            <h2>💾 LocalStorage</h2>
+            <button class="btn" onclick="loadLocalStorage()">Показати LocalStorage</button>
+            <pre id="localStorageData">Натисніть кнопку для завантаження...</pre>
+        </div>
+
+        <div class="data-section">
+            <h2>🔄 Відновлення</h2>
+            <div id="statusMsg"></div>
+            <button class="btn btn-success" onclick="restoreFebruaryFromFirebase()">Відновити Лютий з Firebase</button>
+            <button class="btn" onclick="exportFirebaseData()">Експортувати всі дані Firebase</button>
+        </div>
+    </div>
+
+    <!-- Firebase SDK -->
+    <script type="module">
+        import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js';
+        import { getDatabase, ref, get, child } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js';
+        
+        const firebaseConfig = {
+            apiKey: "AIzaSyBjusHy-xqg8FA8LjsGHK8DJFm4eJppDHM",
+            authDomain: "work-time-a7236.firebaseapp.com",
+            databaseURL: "https://work-time-a7236-default-rtdb.europe-west1.firebasedatabase.app",
+            projectId: "work-time-a7236",
+            storageBucket: "work-time-a7236.firebasestorage.app",
+            messagingSenderId: "68175538100",
+            appId: "1:68175538100:web:bdb96fe020af7c3e59f4e1"
+        };
+        
+        const app = initializeApp(firebaseConfig);
+        const database = getDatabase(app);
+        
+        window.firebaseDB = database;
+        window.firebaseRef = ref;
+        window.firebaseGet = get;
+        window.firebaseChild = child;
+    </script>
+
+    <script>
+        function showStatus(message, type = 'info') {
+            const statusDiv = document.getElementById('statusMsg');
+            statusDiv.className = `status ${type}`;
+            statusDiv.textContent = message;
+        }
+
+        async function loadAllMonths() {
+            try {
+                showStatus('Завантаження даних...', 'info');
+                const dbRef = window.firebaseRef(window.firebaseDB);
+                const snapshot = await window.firebaseGet(window.firebaseChild(dbRef, 'workTime'));
+                
+                if (snapshot.exists()) {
+                    const data = snapshot.val();
+                    document.getElementById('allMonthsData').textContent = JSON.stringify(data, null, 2);
+                    showStatus('✓ Дані завантажено успішно!', 'success');
+                } else {
+                    document.getElementById('allMonthsData').textContent = 'Немає даних у Firebase';
+                    showStatus('⚠ Дані не знайдено', 'error');
+                }
+            } catch (error) {
+                console.error('Error loading data:', error);
+                document.getElementById('allMonthsData').textContent = 'Помилка: ' + error.message;
+                showStatus('❌ Помилка завантаження: ' + error.message, 'error');
+            }
+        }
+
+        async function loadFebruary2026() {
+            try {
+                showStatus('Завантаження даних лютого...', 'info');
+                const dbRef = window.firebaseRef(window.firebaseDB);
+                const snapshot = await window.firebaseGet(window.firebaseChild(dbRef, 'workTime/2026/02'));
+                
+                if (snapshot.exists()) {
+                    const data = snapshot.val();
+                    document.getElementById('february2026Data').textContent = JSON.stringify(data, null, 2);
+                    showStatus('✓ Дані лютого 2026 знайдено!', 'success');
+                    
+                    // Показуємо статистику
+                    if (data.rows) {
+                        const workDays = data.rows.filter(row => row.startTime).length;
+                        showStatus(`✓ Знайдено ${data.rows.length} днів, ${workDays} робочих днів`, 'success');
+                    }
+                } else {
+                    document.getElementById('february2026Data').textContent = 'Немає даних за Лютий 2026';
+                    showStatus('⚠ Дані лютого не знайдено у Firebase', 'error');
+                }
+            } catch (error) {
+                console.error('Error loading February data:', error);
+                document.getElementById('february2026Data').textContent = 'Помилка: ' + error.message;
+                showStatus('❌ Помилка: ' + error.message, 'error');
+            }
+        }
+
+        function loadLocalStorage() {
+            const localData = {};
+            for (let i = 0; i < localStorage.length; i++) {
+                const key = localStorage.key(i);
+                if (key.startsWith('timeTracking_')) {
+                    try {
+                        localData[key] = JSON.parse(localStorage.getItem(key));
+                    } catch {
+                        localData[key] = localStorage.getItem(key);
+                    }
+                }
+            }
+            document.getElementById('localStorageData').textContent = JSON.stringify(localData, null, 2);
+            
+            const keysCount = Object.keys(localData).length;
+            showStatus(`✓ Знайдено ${keysCount} записів у LocalStorage`, 'success');
+        }
+
+        async function restoreFebruaryFromFirebase() {
+            if (!confirm('Ви впевнені, що хочете відновити дані Лютого 2026 з Firebase?\nЦе перезапише поточні локальні дані.')) {
+                return;
+            }
+
+            try {
+                showStatus('Відновлення даних...', 'info');
+                const dbRef = window.firebaseRef(window.firebaseDB);
+                const snapshot = await window.firebaseGet(window.firebaseChild(dbRef, 'workTime/2026/02'));
+                
+                if (snapshot.exists()) {
+                    const data = snapshot.val();
+                    
+                    // Зберігаємо в localStorage у правильному форматі
+                    const storageKey = 'timeTracking_2026_02';
+                    
+                    // data.rows містить масив даних по днях
+                    if (data.rows) {
+                        localStorage.setItem(storageKey, JSON.stringify(data.rows));
+                        
+                        // Зберігаємо також minHours якщо є
+                        if (data.minHours) {
+                            localStorage.setItem(`${storageKey}_minHours`, data.minHours);
+                        }
+                        
+                        showStatus('✓ Дані лютого 2026 успішно відновлено!', 'success');
+                        
+                        // Пропонуємо відкрити головну сторінку
+                        if (confirm('Дані відновлено! Відкрити головну сторінку?')) {
+                            window.location.href = 'index.html';
+                        }
+                    } else {
+                        showStatus('⚠ Дані у неправильному форматі', 'error');
+                    }
+                } else {
+                    showStatus('❌ Немає даних за Лютий 2026 у Firebase', 'error');
+                }
+            } catch (error) {
+                console.error('Error restoring data:', error);
+                showStatus('❌ Помилка відновлення: ' + error.message, 'error');
+            }
+        }
+
+        async function exportFirebaseData() {
+            try {
+                showStatus('Експорт даних...', 'info');
+                const dbRef = window.firebaseRef(window.firebaseDB);
+                const snapshot = await window.firebaseGet(window.firebaseChild(dbRef, 'workTime'));
+                
+                if (snapshot.exists()) {
+                    const data = snapshot.val();
+                    const exportData = {
+                        version: '1.0',
+                        exportDate: new Date().toISOString(),
+                        source: 'Firebase',
+                        data: data
+                    };
+
+                    const json = JSON.stringify(exportData, null, 2);
+                    const blob = new Blob([json], { type: 'application/json' });
+                    const link = document.createElement('a');
+                    link.href = URL.createObjectURL(blob);
+                    link.download = `Firebase_backup_${new Date().toISOString().split('T')[0]}.json`;
+                    link.click();
+
+                    showStatus('✓ Дані експортовано успішно!', 'success');
+                } else {
+                    showStatus('⚠ Немає даних для експорту', 'error');
+                }
+            } catch (error) {
+                console.error('Error exporting data:', error);
+                showStatus('❌ Помилка експорту: ' + error.message, 'error');
+            }
+        }
+
+        // Автозавантаження при відкритті сторінки
+        window.addEventListener('load', async () => {
+            await new Promise(resolve => setTimeout(resolve, 1000));
+            showStatus('Підключено до Firebase. Виберіть дію.', 'info');
+        });
+    </script>
+</body>
+</html>

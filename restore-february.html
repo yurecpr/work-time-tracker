@@ -1,0 +1,275 @@
+<!DOCTYPE html>
+<html lang="uk">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Відновлення даних Лютого</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            padding: 20px;
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .container {
+            max-width: 800px;
+            background: white;
+            border-radius: 15px;
+            padding: 40px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+        }
+        h1 {
+            color: #667eea;
+            margin-bottom: 20px;
+            text-align: center;
+        }
+        .info-box {
+            background: #dbeafe;
+            padding: 20px;
+            border-radius: 10px;
+            margin: 20px 0;
+            border-left: 4px solid #3b82f6;
+        }
+        .success-box {
+            background: #d1fae5;
+            padding: 20px;
+            border-radius: 10px;
+            margin: 20px 0;
+            border-left: 4px solid #10b981;
+        }
+        .warning-box {
+            background: #fef3c7;
+            padding: 20px;
+            border-radius: 10px;
+            margin: 20px 0;
+            border-left: 4px solid #f59e0b;
+        }
+        .error-box {
+            background: #fee2e2;
+            padding: 20px;
+            border-radius: 10px;
+            margin: 20px 0;
+            border-left: 4px solid #ef4444;
+        }
+        .btn {
+            padding: 15px 30px;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 18px;
+            font-weight: 600;
+            margin: 10px 5px;
+            transition: all 0.3s;
+        }
+        .btn-primary {
+            background: #667eea;
+            color: white;
+        }
+        .btn-primary:hover {
+            background: #5568d3;
+            transform: translateY(-2px);
+        }
+        .btn-success {
+            background: #10b981;
+            color: white;
+        }
+        .btn-success:hover {
+            background: #059669;
+            transform: translateY(-2px);
+        }
+        .btn-danger {
+            background: #ef4444;
+            color: white;
+        }
+        .btn-danger:hover {
+            background: #dc2626;
+            transform: translateY(-2px);
+        }
+        .data-preview {
+            background: #f8f9fa;
+            padding: 15px;
+            border-radius: 8px;
+            max-height: 300px;
+            overflow-y: auto;
+            font-family: 'Courier New', monospace;
+            font-size: 12px;
+        }
+        .stats {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 15px;
+            margin: 20px 0;
+        }
+        .stat-card {
+            background: #f8f9fa;
+            padding: 15px;
+            border-radius: 8px;
+            text-align: center;
+        }
+        .stat-value {
+            font-size: 32px;
+            font-weight: bold;
+            color: #667eea;
+        }
+        .stat-label {
+            color: #6c757d;
+            font-size: 14px;
+        }
+        .actions {
+            text-align: center;
+            margin-top: 30px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🔄 Відновлення даних Лютого 2026</h1>
+        
+        <div id="statusBox"></div>
+        
+        <div class="stats" id="statsBox" style="display: none;">
+            <div class="stat-card">
+                <div class="stat-value" id="workDaysCount">0</div>
+                <div class="stat-label">Робочих днів</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-value" id="totalHoursCount">0:00</div>
+                <div class="stat-label">Всього годин</div>
+            </div>
+        </div>
+        
+        <div id="dataPreview" style="display: none;">
+            <h3>Знайдені робочі дні:</h3>
+            <div class="data-preview" id="workDaysList"></div>
+        </div>
+        
+        <div class="actions">
+            <button class="btn btn-primary" onclick="checkData()">🔍 Перевірити дані</button>
+            <button class="btn btn-success" id="restoreBtn" onclick="restoreData()" style="display: none;">✅ Відновити дані</button>
+            <button class="btn btn-danger" onclick="window.location.href='index.html'">❌ Скасувати</button>
+        </div>
+    </div>
+
+    <script>
+        let februaryData = null;
+
+        function showStatus(message, type = 'info') {
+            const statusBox = document.getElementById('statusBox');
+            statusBox.className = type + '-box';
+            statusBox.innerHTML = message;
+            statusBox.style.display = 'block';
+        }
+
+        function checkData() {
+            const storageKey = 'timeTracking_2026_02';
+            const savedData = localStorage.getItem(storageKey);
+            
+            if (!savedData) {
+                showStatus('❌ Дані лютого не знайдено в LocalStorage!', 'error');
+                return;
+            }
+
+            try {
+                februaryData = JSON.parse(savedData);
+                
+                // Підрахунок робочих днів та годин
+                let workDays = 0;
+                let totalMinutes = 0;
+                let workDaysList = [];
+
+                februaryData.forEach((day, index) => {
+                    if (day.start && day.end) {
+                        workDays++;
+                        
+                        // Обчислення годин
+                        const start = new Date(`2000-01-01T${day.start}`);
+                        const end = new Date(`2000-01-01T${day.end}`);
+                        let hours = (end - start) / (1000 * 60 * 60);
+                        
+                        // Врахування перерви
+                        if (day.breakStart && day.breakEnd) {
+                            const breakStart = new Date(`2000-01-01T${day.breakStart}`);
+                            const breakEnd = new Date(`2000-01-01T${day.breakEnd}`);
+                            const breakHours = (breakEnd - breakStart) / (1000 * 60 * 60);
+                            hours -= breakHours;
+                        }
+                        
+                        const minutes = Math.round(hours * 60);
+                        totalMinutes += minutes;
+                        
+                        const h = Math.floor(hours);
+                        const m = Math.round((hours - h) * 60);
+                        
+                        workDaysList.push(`День ${index + 1} (${getDateString(index + 1)}): ${day.start} - ${day.end}${day.breakStart ? ` (перерва ${day.breakStart}-${day.breakEnd})` : ''} = ${h}:${String(m).padStart(2, '0')}`);
+                    }
+                });
+
+                // Відображення статистики
+                document.getElementById('workDaysCount').textContent = workDays;
+                const totalH = Math.floor(totalMinutes / 60);
+                const totalM = totalMinutes % 60;
+                document.getElementById('totalHoursCount').textContent = `${totalH}:${String(totalM).padStart(2, '0')}`;
+                document.getElementById('statsBox').style.display = 'grid';
+
+                // Відображення списку робочих днів
+                document.getElementById('workDaysList').innerHTML = workDaysList.join('<br>');
+                document.getElementById('dataPreview').style.display = 'block';
+
+                // Показуємо кнопку відновлення
+                document.getElementById('restoreBtn').style.display = 'inline-block';
+
+                showStatus(`✅ Знайдено дані лютого 2026!<br><strong>${workDays} робочих днів</strong>, загальна кількість відпрацьованих годин: <strong>${totalH}:${String(totalM).padStart(2, '0')}</strong>`, 'success');
+
+            } catch (error) {
+                showStatus(`❌ Помилка читання даних: ${error.message}`, 'error');
+            }
+        }
+
+        function getDateString(day) {
+            const date = new Date(2026, 1, day); // 1 = лютий (місяці з 0)
+            const days = ['Нд', 'Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб'];
+            return `${days[date.getDay()]} ${day}.02`;
+        }
+
+        function restoreData() {
+            if (!februaryData) {
+                showStatus('❌ Спочатку перевірте дані!', 'error');
+                return;
+            }
+
+            if (!confirm('Ви впевнені, що хочете відновити ці дані?\nПоточні дані лютого будуть замінені.')) {
+                return;
+            }
+
+            try {
+                // Зберігаємо дані назад
+                const storageKey = 'timeTracking_2026_02';
+                localStorage.setItem(storageKey, JSON.stringify(februaryData));
+                
+                // Також зберігаємо minHours якщо є
+                const minHours = localStorage.getItem(`${storageKey}_minHours`);
+                if (minHours) {
+                    localStorage.setItem(`${storageKey}_minHours`, minHours);
+                }
+
+                showStatus('✅ Дані успішно відновлено!<br><br>Зараз ви будете переадресовані на головну сторінку...', 'success');
+
+                setTimeout(() => {
+                    window.location.href = 'index.html';
+                }, 2000);
+
+            } catch (error) {
+                showStatus(`❌ Помилка відновлення: ${error.message}`, 'error');
+            }
+        }
+
+        // Автоматична перевірка при завантаженні
+        window.addEventListener('load', () => {
+            setTimeout(checkData, 500);
+        });
+    </script>
+</body>
+</html>

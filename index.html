@@ -393,6 +393,8 @@
             <button class="btn btn-success" id="googleBtn" onclick="connectGoogle()">🔗 Підключити Google Sheets</button>
             <button class="btn btn-success" id="syncBtn" onclick="syncToGoogle()" style="display:none">☁️ Синхронізувати з Google</button>
             <button class="btn btn-info" onclick="window.print()">🖨️ Друк</button>
+            <button class="btn btn-warning" onclick="manualBackup()">💾 Зберегти Backup</button>
+            <button class="btn btn-info" onclick="showBackupHistory()">📜 Історія Backup</button>
         </div>
 
         <div class="stats">
@@ -476,6 +478,11 @@
 
         // Перевірка підключення до Firebase при завантаженні
         window.onload = async function() {
+            // Встановлюємо поточний місяць і рік
+            const today = new Date();
+            document.getElementById('monthSelect').value = today.getMonth();
+            document.getElementById('yearSelect').value = today.getFullYear();
+            
             // Чекаємо завантаження Firebase
             await new Promise(resolve => setTimeout(resolve, 500));
             
@@ -558,13 +565,30 @@
             calculateAllHours();
         }
 
-        // Зміна місяця
+        // Зміна місяця з захистом від втрати даних
         async function changeMonth() {
             // Зберігаємо поточні дані з СТАРИМИ значеннями місяця/року (ДО оновлення currentMonth/currentYear)
             const oldMonth = currentMonth;
             const oldYear = currentYear;
             
             if (oldMonth !== null && oldYear !== null) {
+                // Перевіряємо чи є несинхронізовані дані
+                const hasData = checkIfMonthHasData(oldMonth, oldYear);
+                
+                if (hasData) {
+                    // ВАЖЛИВО: Автоматичний бекап перед зміною місяця
+                    await autoBackupMonth(oldMonth, oldYear);
+                    
+                    // Попередження користувача
+                    const monthName = monthNames[oldMonth];
+                    if (!confirm(`⚠️ У вас є дані за ${monthName} ${oldYear}.\n\n✅ Автоматичний backup створено\n\nПродовжити зміну місяця?`)) {
+                        // Повертаємо назад селектори
+                        document.getElementById('monthSelect').value = oldMonth;
+                        document.getElementById('yearSelect').value = oldYear;
+                        return;
+                    }
+                }
+                
                 const daysInMonth = new Date(oldYear, oldMonth + 1, 0).getDate();
                 
                 const data = [];
@@ -611,6 +635,69 @@
             
             // Тепер ініціалізуємо новий місяць (currentMonth буде оновлено в initTable)
             await initTable();
+        }
+
+        // Перевірка чи є дані в місяці
+        function checkIfMonthHasData(month, year) {
+            const daysInMonth = new Date(year, month + 1, 0).getDate();
+            
+            for (let day = 1; day <= daysInMonth; day++) {
+                const row = document.querySelector(`tr[data-day="${day}"]`);
+                if (row) {
+                    const start = row.querySelector('.start-time')?.value;
+                    const end = row.querySelector('.end-time')?.value;
+                    const notes = row.querySelector('.notes')?.value;
+                    
+                    if (start || end || notes) {
+                        return true; // Є дані
+                    }
+                }
+            }
+            
+            return false; // Немає даних
+        }
+
+        // Автоматичний backup місяця - ТІЛЬКИ В FIREBASE
+        async function autoBackupMonth(month, year) {
+            const monthName = monthNames[month];
+            const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, -5);
+            
+            if (!firebaseSyncEnabled || !window.firebaseDB) {
+                showNotification('⚠️ Firebase недоступний, backup не створено', true);
+                return;
+            }
+            
+            try {
+                // Завантажуємо поточні дані з Firebase
+                const dbRef = window.firebaseRef(window.firebaseDB);
+                const snapshot = await window.firebaseGet(window.firebaseChild(dbRef, `workTime/${year}/${String(month + 1).padStart(2, '0')}`));
+                
+                if (snapshot.exists()) {
+                    const currentData = snapshot.val();
+                    
+                    const backupData = {
+                        version: '1.0',
+                        backupDate: new Date().toISOString(),
+                        month: month,
+                        year: year,
+                        monthName: monthName,
+                        autoBackup: true,
+                        data: currentData
+                    };
+                    
+                    // Зберігаємо ТІЛЬКИ в Firebase
+                    const backupRef = window.firebaseRef(window.firebaseDB, `backups/${year}/${String(month + 1).padStart(2, '0')}/${timestamp}`);
+                    await window.firebaseSet(backupRef, backupData);
+                    
+                    console.log(`✓ Backup створено в Firebase: backups/${year}/${String(month + 1).padStart(2, '0')}/${timestamp}`);
+                    showNotification(`💾 Backup ${monthName} збережено в хмарі`);
+                } else {
+                    console.log('Немає даних для backup');
+                }
+            } catch (error) {
+                console.error('Помилка створення backup:', error);
+                showNotification('⚠️ Помилка створення backup: ' + error.message, true);
+            }
         }
 
         // Розрахунок годин для одного дня
@@ -743,7 +830,7 @@
             }
         }
 
-        // Збереження даних
+        // Збереження даних - ТІЛЬКИ В FIREBASE
         async function saveData() {
             const month = parseInt(document.getElementById('monthSelect').value);
             const year = parseInt(document.getElementById('yearSelect').value);
@@ -781,16 +868,18 @@
             }
             
             const minHours = document.getElementById('minHours').value;
-            
-            // Збереження локально
             const storageKey = `timeTracking_${year}_${String(month + 1).padStart(2, '0')}`;
-            localStorage.setItem(storageKey, JSON.stringify(data));
-            localStorage.setItem(`${storageKey}_minHours`, minHours);
             
-            // Синхронізація з Firebase
+            // ПРІОРИТЕТ: Збереження в Firebase
             if (firebaseSyncEnabled) {
                 await saveToFirebase(month, year, rows);
+            } else {
+                showNotification('⚠️ Firebase недоступний! Дані не збережено.', true);
             }
+            
+            // LocalStorage тільки як тимчасовий кеш
+            localStorage.setItem(storageKey, JSON.stringify(data));
+            localStorage.setItem(`${storageKey}_minHours`, minHours);
             
             const btn = event?.target;
             if (btn) {
@@ -823,13 +912,13 @@
             }
         }
 
-        // Завантаження даних
+        // Завантаження даних - ЗАВЖДИ З FIREBASE
         async function loadData() {
             const month = parseInt(document.getElementById('monthSelect').value);
             const year = parseInt(document.getElementById('yearSelect').value);
             const storageKey = `timeTracking_${year}_${String(month + 1).padStart(2, '0')}`;
             
-            // Завантажуємо minHours з localStorage (завжди)
+            // Завантажуємо minHours
             const savedMinHours = localStorage.getItem(`${storageKey}_minHours`);
             if (savedMinHours) {
                 document.getElementById('minHours').value = savedMinHours;
@@ -878,9 +967,10 @@
             calculateAllHours();
         }
 
-        // Завантаження з Firebase
+        // Завантаження з Firebase - ОСНОВНЕ ДЖЕРЕЛО
         async function loadFromFirebase(month, year) {
             try {
+                console.log(`Завантаження з Firebase: ${year}/${month + 1}`);
                 if (!window.firebaseDB || !firebaseSyncEnabled) {
                     console.log('Firebase недоступний, завантажуємо локально');
                     return null;
@@ -1266,8 +1356,169 @@ function onOpen() {
             }, 3000);
         }
 
-        // Автозбереження в браузер
+        // Ручний backup
+        function manualBackup() {
+            if (currentMonth === null || currentYear === null) {
+                showNotification('⚠️ Спочатку оберіть місяць', true);
+                return;
+            }
+            
+            autoBackupMonth(currentMonth, currentYear).then(() => {
+                showNotification('✓ Backup створено успішно!');
+            });
+        }
+
+        // Показати історію backup - З FIREBASE
+        async function showBackupHistory() {
+            if (!firebaseSyncEnabled || !window.firebaseDB) {
+                showNotification('⚠️ Firebase недоступний', true);
+                return;
+            }
+            
+            showNotification('⏳ Завантаження історії backup...');
+            
+            try {
+                const dbRef = window.firebaseRef(window.firebaseDB);
+                const snapshot = await window.firebaseGet(window.firebaseChild(dbRef, 'backups'));
+                
+                const backups = [];
+                
+                if (snapshot.exists()) {
+                    const allBackups = snapshot.val();
+                    
+                    // Парсимо структуру: backups/year/month/timestamp
+                    Object.keys(allBackups).forEach(year => {
+                        Object.keys(allBackups[year]).forEach(month => {
+                            Object.keys(allBackups[year][month]).forEach(timestamp => {
+                                const data = allBackups[year][month][timestamp];
+                                backups.push({
+                                    key: `${year}/${month}/${timestamp}`,
+                                    data: data,
+                                    date: new Date(data.backupDate)
+                                });
+                            });
+                        });
+                    });
+                }
+                
+                if (backups.length === 0) {
+                    showNotification('ℹ️ Немає збережених backup в Firebase');
+                    return;
+                }
+            
+                // Сортуємо за датою (новіші зверху)
+                backups.sort((a, b) => b.date - a.date);
+            
+            const popup = document.createElement('div');
+            popup.style.cssText = `
+                position: fixed;
+                top: 50%;
+                left: 50%;
+                transform: translate(-50%, -50%);
+                background: white;
+                padding: 30px;
+                border-radius: 15px;
+                box-shadow: 0 10px 40px rgba(0,0,0,0.3);
+                z-index: 10000;
+                max-width: 800px;
+                max-height: 80vh;
+                overflow-y: auto;
+            `;
+            
+            let html = `<h2 style="color: #667eea; margin-bottom: 20px;">📜 Історія Backup (${backups.length})</h2>`;
+            
+            backups.forEach(backup => {
+                const dateStr = backup.date.toLocaleString('uk-UA');
+                const monthName = backup.data.monthName || monthNames[backup.data.month];
+                const isAuto = backup.data.autoBackup ? '🤖 Авто' : '👤 Ручний';
+                
+const workDays = backup.data.data?.rows ? backup.data.data.rows.filter(d => d[2]).length : 0;
+                    
+                    html += `
+                    <div style="background: #f8f9fa; padding: 15px; border-radius: 8px; margin: 10px 0; border-left: 4px solid #667eea;">
+                        <strong>${isAuto} ${monthName} ${backup.data.year}</strong><br>
+                        📅 ${dateStr}<br>
+                        📊 ${workDays} робочих днів<br>
+                        ☁️ Firebase: ${backup.key}<br>
+                        <button onclick="restoreFromFirebaseBackup('${backup.key}')" style="padding: 8px 16px; background: #10b981; color: white; border: none; border-radius: 5px; cursor: pointer; margin-top: 10px;">♻️ Відновити</button>
+                    </div>
+                `;
+                });
+            
+            html += `<div style="text-align: center; margin-top: 20px;">
+                <button onclick="this.parentElement.parentElement.remove(); document.getElementById('overlay').remove()" style="padding: 12px 24px; background: #6c757d; color: white; border: none; border-radius: 8px; cursor: pointer;">Закрити</button>
+            </div>`;
+            
+            popup.innerHTML = html;
+            
+            const overlay = createOverlay();
+            overlay.id = 'overlay';
+            document.body.appendChild(overlay);
+            document.body.appendChild(popup);
+        }
+
+        // Відновлення з Firebase backup
+        window.restoreFromFirebaseBackup = async function(backupKey) {
+            if (!confirm('Ви впевнені, що хочете відновити дані з цього backup?\nПоточні дані будуть замінені.')) {
+                return;
+            }
+            
+            if (!firebaseSyncEnabled || !window.firebaseDB) {
+                showNotification('⚠️ Firebase недоступний', true);
+                return;
+            }
+            
+            try {
+                showNotification('⏳ Відновлення з Firebase...');
+                
+                const dbRef = window.firebaseRef(window.firebaseDB);
+                const snapshot = await window.firebaseGet(window.firebaseChild(dbRef, `backups/${backupKey}`));
+                
+                if (snapshot.exists()) {
+                    const backupData = snapshot.val();
+                    const month = backupData.month;
+                    const year = backupData.year;
+                    
+                    // Відновлюємо дані в Firebase workTime
+                    const workTimeRef = window.firebaseRef(window.firebaseDB, `workTime/${year}/${String(month + 1).padStart(2, '0')}`);
+                    await window.firebaseSet(workTimeRef, backupData.data);
+                    
+                    showNotification('✓ Дані відновлено з backup!');
+                    
+                    // Якщо це поточний місяць, перезавантажуємо
+                    if (month === currentMonth && year === currentYear) {
+                        await initTable();
+                    }
+                    
+                    // Закриваємо popup
+                    document.getElementById('overlay').remove();
+                    document.querySelectorAll('[style*="z-index: 10000"]').forEach(el => el.remove());
+                } else {
+                    showNotification('❌ Backup не знайдено', true);
+                }
+            } catch (error) {
+                console.error('Помилка відновлення:', error);
+                showNotification('❌ Помилка відновлення: ' + error.message, true);
+            }
+        };
+
+        // Автозбереження в браузер кожні 30 секунд
         setInterval(saveData, 30000);
+        
+        // Автоматичний щоденний backup (раз на день)
+        setInterval(() => {
+            if (currentMonth !== null && currentYear !== null) {
+                const lastBackupKey = `lastDailyBackup_${currentYear}_${currentMonth}`;
+                const lastBackup = localStorage.getItem(lastBackupKey);
+                const today = new Date().toDateString();
+                
+                if (lastBackup !== today) {
+                    console.log('Виконуємо щоденний автоматичний backup...');
+                    autoBackupMonth(currentMonth, currentYear);
+                    localStorage.setItem(lastBackupKey, today);
+                }
+            }
+        }, 60000); // Перевірка кожну хвилину
     </script>
 </body>
 </html>
